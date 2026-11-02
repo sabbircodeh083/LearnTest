@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --bg: #ffffff;
+  --bg-soft: #f5f7f6;
+  --card: #ffffff;
+  --ink: #111827;
+  --muted: #5b6470;
+  --line: #e5e7eb;
+  --brand: #16a34a;
+  --brand-strong: #15803d;
+  --brand-soft: #eaf7ee;
+  --danger: #b91c1c;
+  --danger-soft: #fdf0f0;
+  --warn: #92400e;
+  --warn-soft: #fdf6e7;
+  --info-soft: #eef4ff;
+}
+.dark {
+  --bg: #111315;
+  --bg-soft: #16181a;
+  --card: #1b1e20;
+  --ink: #f1f4f2;
+  --muted: #a7b0aa;
+  --line: #34383a;
+  --brand: #22c55e;
+  --brand-strong: #4ade80;
+  --brand-soft: #173324;
+  --danger: #f87171;
+  --danger-soft: #3a1d1d;
+  --warn: #fbbf24;
+  --warn-soft: #38300f;
+  --info-soft: #1d2a44;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-soft: var(--bg-soft);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-brandstrong: var(--brand-strong);
+  --color-brandsoft: var(--brand-soft);
+  --color-danger: var(--danger);
+  --color-dangersoft: var(--danger-soft);
+  --color-warn: var(--warn);
+  --color-warnsoft: var(--warn-soft);
+  --color-infosoft: var(--info-soft);
+  --font-sans: var(--font-jakarta), ui-sans-system, system-ui, sans-serif;
+  --font-display: var(--font-fraunces), Georgia, serif;
+}
+
+html { color-scheme: light; }
+.dark { color-scheme: dark; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-jakarta), system-ui, sans-serif; }
+::selection { background: #16a34a; color: #fff; }
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+input, select, textarea { font: inherit; }
