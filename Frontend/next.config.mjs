@@ -26,6 +26,9 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https://i.ytimg.com https://img.youtube.com",
       "font-src 'self' data:",
+      // Uploaded videos stream from the API origin (separate port/host); blob:
+      // covers the authorized-download fallback used by the player.
+      `media-src 'self' blob: ${apiOrigin}`,
       "frame-src https://www.youtube-nocookie.com https://www.youtube.com",
       `connect-src 'self' ${apiOrigin}`,
       "object-src 'none'",

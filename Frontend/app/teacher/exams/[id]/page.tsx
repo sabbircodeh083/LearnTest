@@ -132,7 +132,7 @@ function SubmissionsTab({ examId, outOf }: { examId: string; outOf: number }) {
   const pages = Math.max(1, Math.ceil(total / 10));
 
   return (
-    <section className="rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] sm:p-6" aria-label="Student Submissions">
+    <section className="rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] sm:p-6 card-hover" aria-label="Student Submissions">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold tracking-tight">Student Submissions</h2>
@@ -233,7 +233,7 @@ function QuestionsTab({ examId, qids, kind }: { examId: string; qids: string[]; 
     return !!x && (x === y || (y.startsWith(x) && y.length - x.length < 10) || (x.startsWith(y) && x.length - y.length < 10));
   };
   return (
-    <section className="rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] sm:p-6" aria-label="Questions">
+    <section className="rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] sm:p-6 card-hover" aria-label="Questions">
       <h2 className="text-xl font-bold tracking-tight">Questions</h2>
       <p className="mt-1 text-sm text-muted">{qids.length} question{qids.length === 1 ? "" : "s"} in this test, in order.</p>
       <div className="mt-4">
@@ -266,7 +266,7 @@ function QuestionsTab({ examId, qids, kind }: { examId: string; qids: string[]; 
 /* ---------- overview tab ---------- */
 function StatMini({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <div className="flex items-start gap-4 rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)]">
+    <div className="flex items-start gap-4 rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] card-hover">
       {icon}
       <div>
         <p className="text-sm text-muted">{label}</p>
@@ -323,7 +323,7 @@ function OverviewTab({ rows, outOf, examId, kind }: { rows: ExamAttemptRow[]; ou
 
       {kind !== "problem" && (
       <div className="grid gap-4 lg:grid-cols-5">
-        <div className="rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] lg:col-span-3">
+        <div className="rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] lg:col-span-3 card-hover">
           <h3 className="text-[17px] font-bold">Score Distribution</h3>
           {graded.length && outOf ? (
             <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -339,7 +339,7 @@ function OverviewTab({ rows, outOf, examId, kind }: { rows: ExamAttemptRow[]; ou
             <p className="mt-3 text-sm text-muted">No graded submissions yet — distribution appears here once you grade.</p>
           )}
         </div>
-        <div className="rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] lg:col-span-2">
+        <div className="rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] lg:col-span-2 card-hover">
           <h3 className="text-[17px] font-bold">Average Score</h3>
           <div className="mt-3 flex flex-wrap items-center gap-5">
             <div className="relative h-[104px] w-[104px]" role="img" aria-label={avgPct !== null ? `Average score ${avgPct} percent` : "No average yet"}>
@@ -362,7 +362,7 @@ function OverviewTab({ rows, outOf, examId, kind }: { rows: ExamAttemptRow[]; ou
       )}
 
       {kind !== "quiz" && kind !== "problem" && (
-      <section className="rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] sm:p-6" aria-label="Recent Submissions">
+      <section className="rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] sm:p-6 card-hover" aria-label="Recent Submissions">
         <h3 className="text-[17px] font-bold">Recent Submissions</h3>
         <p className="mt-0.5 text-sm text-muted">Latest student submissions for this test.</p>
         <div className="mt-3">
@@ -455,7 +455,7 @@ function TeacherExamDetailInner() {
         : (
           <>
             {/* header card */}
-            <section className="mt-4 flex flex-col gap-5 rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] sm:p-6 lg:flex-row lg:items-center" aria-label="Test summary">
+            <section className="mt-4 flex flex-col gap-5 rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] sm:p-6 card-hover lg:flex-row lg:items-center" aria-label="Test summary">
               <span aria-hidden className={`flex h-20 w-20 shrink-0 items-center justify-center rounded-xl ${typeMeta.box}`}>
                 <svg viewBox="0 0 24 24" className="h-10 w-10" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">{typeMeta.icon}</svg>
               </span>

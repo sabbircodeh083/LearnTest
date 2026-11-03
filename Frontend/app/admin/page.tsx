@@ -13,8 +13,8 @@ function Stat({ label, value, href }: { label: string; value: number; href?: str
     </>
   );
   return href
-    ? <Link href={href} className="rounded-xl border border-line bg-card p-5 hover:border-brand">{inner}</Link>
-    : <div className="rounded-xl border border-line bg-card p-5">{inner}</div>;
+    ? <Link href={href} className="rounded-xl border border-line bg-card p-5 card-hover hover:border-brand">{inner}</Link>
+    : <div className="rounded-xl border border-line bg-card p-5 card-hover">{inner}</div>;
 }
 
 export default function AdminOverviewPage() {

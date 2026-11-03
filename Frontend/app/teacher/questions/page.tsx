@@ -56,7 +56,7 @@ export default function TeacherQuestionsPage() {
                 {matches.map((q) => (
                   <li key={q._id}>
                     <button onClick={() => setHighlightId(q._id)} aria-pressed={highlighted?._id === q._id}
-                      className={`w-full rounded-xl border p-4 text-left ${highlighted?._id === q._id ? "border-brand bg-brandsoft" : "border-line bg-card hover:border-brand"}`}>
+                      className={`w-full rounded-xl border p-4 text-left card-hover ${highlighted?._id === q._id ? "border-brand bg-brandsoft" : "border-line bg-card hover:border-brand"}`}>
                       <span className="flex items-center justify-between gap-2">
                         <span className="font-semibold">{q.title}</span>
                         <Badge tone={statusTone(q.status)}>{q.status}</Badge>
@@ -73,7 +73,7 @@ export default function TeacherQuestionsPage() {
             )}
         </div>
 
-        <aside aria-label="Highlighted question" className="h-fit rounded-2xl border border-line bg-card p-5 lg:sticky lg:top-24">
+        <aside aria-label="Highlighted question" className="h-fit rounded-2xl border border-line bg-card p-5 lg:sticky lg:top-24 card-hover">
           <h2 className="text-sm font-bold uppercase tracking-wide text-muted">Highlighted question</h2>
           {!highlighted ? <p className="mt-3 text-sm text-muted">Search and select a question to highlight it here.</p> : (
             <>

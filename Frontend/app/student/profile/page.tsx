@@ -13,7 +13,7 @@ import {
   joinedLabel,
 } from "@/components/profile";
 
-const cardCls = "rounded-2xl border border-line bg-card p-5 sm:p-6";
+const cardCls = "rounded-2xl border border-line bg-card p-5 sm:p-6 card-hover";
 
 function InfoRow({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
   return (

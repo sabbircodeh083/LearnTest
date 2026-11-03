@@ -307,7 +307,7 @@ export function QuizForm({ initial }: { initial?: QuizFormInitial }) {
       <div className="mt-4 grid items-start gap-5 xl:grid-cols-3">
         <div className="space-y-5 xl:col-span-2">
           {/* basic info */}
-          <section className="rounded-xl border border-line bg-card p-5 sm:p-6" aria-label="Basic Information">
+          <section className="rounded-xl border border-line bg-card p-5 sm:p-6 card-hover" aria-label="Basic Information">
             <h2 className="text-[17px] font-bold">Basic Information</h2>
             <div className="mt-3 grid gap-4 sm:grid-cols-2">
               <div>
@@ -364,7 +364,7 @@ export function QuizForm({ initial }: { initial?: QuizFormInitial }) {
           </section>
 
           {/* questions */}
-          <section className="rounded-xl border border-line bg-card p-5 sm:p-6" aria-label="Questions">
+          <section className="rounded-xl border border-line bg-card p-5 sm:p-6 card-hover" aria-label="Questions">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-[17px] font-bold">Questions</h2>
             </div>
@@ -480,7 +480,7 @@ export function QuizForm({ initial }: { initial?: QuizFormInitial }) {
 
         {/* right rail */}
         <aside className="space-y-5 xl:sticky xl:top-20">
-          <section className="rounded-xl border border-line bg-card p-5" aria-label="Quiz Settings">
+          <section className="rounded-xl border border-line bg-card p-5 card-hover" aria-label="Quiz Settings">
             <h2 className="text-[17px] font-bold">Quiz Settings</h2>
             <div className="mt-3 grid grid-cols-2 gap-3">
               <div>
@@ -527,7 +527,7 @@ export function QuizForm({ initial }: { initial?: QuizFormInitial }) {
             </div>
           </section>
 
-          <section className="rounded-xl border border-line bg-card p-5" aria-label="Quiz Preview">
+          <section className="rounded-xl border border-line bg-card p-5 card-hover" aria-label="Quiz Preview">
             <div className="flex items-center justify-between">
               <h2 className="text-[17px] font-bold">Quiz Preview</h2>
               {questions.length > 0 && (
@@ -567,7 +567,7 @@ export function QuizForm({ initial }: { initial?: QuizFormInitial }) {
             )}
           </section>
 
-          <section className="rounded-xl border border-line bg-card p-5" aria-label="Question Summary">
+          <section className="rounded-xl border border-line bg-card p-5 card-hover" aria-label="Question Summary">
             <h2 className="text-[17px] font-bold">Question Summary</h2>
             <dl className="mt-3 space-y-2 text-sm">
               {[

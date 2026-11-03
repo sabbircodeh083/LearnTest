@@ -34,3 +34,30 @@ export function isSafeGatewayUrl(raw: unknown): boolean {
     return false;
   }
 }
+
+/** Extracts a YouTube video ID from common URL formats, or returns null.
+ * Supports: youtube.com/watch?v=ID, youtu.be/ID, youtube.com/embed/ID,
+ * m.youtube.com/watch?v=ID, and a raw 11-character ID. */
+export function extractYouTubeVideoId(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const value = raw.trim();
+  if (!value) return null;
+  // Raw 11-character YouTube ID.
+  if (/^[A-Za-z0-9_-]{11}$/.test(value)) return value;
+  try {
+    const u = new URL(value);
+    const host = u.hostname.replace(/^www\./, "");
+    if (host === "youtube.com" || host === "m.youtube.com") {
+      return u.searchParams.get("v") ?? null;
+    }
+    if (host === "youtu.be") {
+      return u.pathname.replace(/^\//, "") || null;
+    }
+    if (host === "youtube.com" && u.pathname.startsWith("/embed/")) {
+      return u.pathname.split("/")[2] ?? null;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}

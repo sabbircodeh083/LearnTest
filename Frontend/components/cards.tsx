@@ -33,7 +33,7 @@ export function VideoCard({ video, href }: { video: Video; href?: string }) {
   const link = href ?? `/student/videos/${idOf(video)}`;
   const thumb = video.youtubeId ? `https://i.ytimg.com/vi/${video.youtubeId}/hqdefault.jpg` : null;
   return (
-    <article className="h-full overflow-hidden rounded-xl border border-line bg-card">
+    <article className="h-full overflow-hidden rounded-xl border border-line bg-card card-hover">
       <Link href={link} className="block">
         {thumb ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -60,7 +60,7 @@ export function QuestionCard({ question, href }: { question: Question; href?: st
   const link = href ?? `/student/questions/${idOf(question)}`;
   const badge = questionBadge(question);
   return (
-    <article className="rounded-xl border border-line bg-card p-4">
+    <article className="rounded-xl border border-line bg-card p-4 card-hover">
       <div className="flex items-start justify-between gap-3">
         <Link href={link} className="font-semibold leading-snug hover:text-brandstrong">{question.title}</Link>
         <Badge tone={badge.tone}>{badge.label}</Badge>
@@ -79,7 +79,7 @@ export interface PlaylistCreator { name: string; avatarUploadId: string | null; 
 
 export function PlaylistCard({ playlist, thumbnailUrl, href, action, creator }: { playlist: Playlist; thumbnailUrl?: string | null; href?: string; action?: React.ReactNode; creator?: PlaylistCreator }) {
   return (
-    <article className="flex h-full flex-col overflow-hidden rounded-xl border border-line bg-card">
+    <article className="flex h-full flex-col overflow-hidden rounded-xl border border-line bg-card card-hover">
       {thumbnailUrl ? (
         href ? (
           <Link href={href} className="block" aria-label={playlist.title}>

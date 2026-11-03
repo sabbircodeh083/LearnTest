@@ -17,6 +17,9 @@
   --warn: #92400e;
   --warn-soft: #fdf6e7;
   --info-soft: #eef4ff;
+  --card-hover-shadow:
+    0 12px 28px -14px rgba(0, 0, 0, 0.34),
+    0 4px 10px -6px rgba(0, 0, 0, 0.14);
 }
 .dark {
   --bg: #111315;
@@ -33,6 +36,9 @@
   --warn: #fbbf24;
   --warn-soft: #38300f;
   --info-soft: #1d2a44;
+  --card-hover-shadow:
+    0 12px 28px -14px rgba(255, 255, 255, 0.18),
+    0 4px 10px -6px rgba(255, 255, 255, 0.08);
 }
 
 @theme inline {
@@ -52,6 +58,20 @@
   --color-infosoft: var(--info-soft);
   --font-sans: var(--font-jakarta), ui-sans-system, system-ui, sans-serif;
   --font-display: var(--font-fraunces), Georgia, serif;
+}
+
+/* Card hover elevation: blackish in light mode, a soft white glow in dark mode. */
+.card-hover {
+  transition:
+    box-shadow 180ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease,
+    color 180ms ease;
+}
+@media (hover: hover) {
+  .card-hover:not(:disabled):hover {
+    box-shadow: var(--card-hover-shadow);
+  }
 }
 
 html { color-scheme: light; }

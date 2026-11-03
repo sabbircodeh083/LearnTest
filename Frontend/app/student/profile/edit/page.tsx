@@ -151,7 +151,7 @@ export default function StudentProfileEditPage() {
       <div className="mt-4 grid items-start gap-5 xl:grid-cols-3">
         <div className="space-y-5 xl:col-span-2">
           {/* cover + photo */}
-          <section className="overflow-hidden rounded-2xl border border-line bg-card" aria-label="Cover and photo">
+          <section className="overflow-hidden rounded-2xl border border-line bg-card card-hover" aria-label="Cover and photo">
             <div className="relative h-44 sm:h-52">
               {coverPreview ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -188,7 +188,7 @@ export default function StudentProfileEditPage() {
           </section>
 
           {/* basic info */}
-          <section className="rounded-2xl border border-line bg-card p-5 sm:p-6" aria-label="Basic information">
+          <section className="rounded-2xl border border-line bg-card p-5 sm:p-6 card-hover" aria-label="Basic information">
             <h2 className="text-[17px] font-bold">Basic Information</h2>
             <div className="mt-3 grid gap-4 sm:grid-cols-2">
               <Field label="Full Name">
@@ -220,7 +220,7 @@ export default function StudentProfileEditPage() {
           </section>
 
           {/* interests */}
-          <section className="rounded-2xl border border-line bg-card p-5 sm:p-6" aria-label="Interests and goals">
+          <section className="rounded-2xl border border-line bg-card p-5 sm:p-6 card-hover" aria-label="Interests and goals">
             <h2 className="text-[17px] font-bold">Interests & Goals</h2>
             <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-line bg-card px-3 py-2.5">
               {skills.map((s) => (
@@ -240,7 +240,7 @@ export default function StudentProfileEditPage() {
           </section>
 
           {/* socials */}
-          <section className="rounded-2xl border border-line bg-card p-5 sm:p-6" aria-label="Social links">
+          <section className="rounded-2xl border border-line bg-card p-5 sm:p-6 card-hover" aria-label="Social links">
             <h2 className="text-[17px] font-bold">Social Links</h2>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               {SOCIAL_TILES.map((t) => (
@@ -259,7 +259,7 @@ export default function StudentProfileEditPage() {
 
         {/* preview rail */}
         <aside className="space-y-5 xl:sticky xl:top-20">
-          <section className="overflow-hidden rounded-2xl border border-line bg-card" aria-label="Profile preview">
+          <section className="overflow-hidden rounded-2xl border border-line bg-card card-hover" aria-label="Profile preview">
             <div className="p-5 pb-0">
               <h2 className="text-[17px] font-bold">Profile Preview</h2>
               <p className="text-[13px] text-muted">This is how your profile will look to others.</p>

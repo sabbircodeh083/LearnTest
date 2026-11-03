@@ -18,7 +18,7 @@ import {
 } from "@/lib/types";
 
 const cardCls =
-  "rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] sm:p-6";
+  "rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] sm:p-6 card-hover";
 
 interface ExamPreview {
   _id: string;

@@ -42,7 +42,7 @@ export default function HomePage() {
               </p>
             </div>
             <div className="grid gap-4 sm:grid-cols-5">
-              <div className="overflow-hidden rounded-xl border border-line bg-card shadow-[0_8px_30px_rgba(16,24,40,0.10)] sm:col-span-3">
+              <div className="overflow-hidden rounded-xl border border-line bg-card shadow-[0_8px_30px_rgba(16,24,40,0.10)] sm:col-span-3 card-hover">
                 {videos.loading ? <div className="aspect-video animate-pulse bg-soft" /> : heroVideo ? (
                   <Link href="/sign-in" className="relative block" aria-label={`Watch ${heroVideo.title} (sign in required)`}>
                     {heroVideo.youtubeId
@@ -59,7 +59,7 @@ export default function HomePage() {
                   <div className="flex aspect-video w-full items-center justify-center bg-soft px-6 text-center text-sm text-muted">Published videos will be featured here.</div>
                 )}
               </div>
-              <div className="rounded-xl border border-line bg-card p-4 shadow-[0_8px_30px_rgba(16,24,40,0.10)] sm:col-span-2">
+              <div className="rounded-xl border border-line bg-card p-4 shadow-[0_8px_30px_rgba(16,24,40,0.10)] sm:col-span-2 card-hover">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-sm font-bold">Tests for this video</p>
                   <span className="rounded-md bg-[#dcfce7] px-2 py-0.5 text-xs font-bold text-[#16a34a]">{heroTests.length} test{heroTests.length === 1 ? "" : "s"} found</span>

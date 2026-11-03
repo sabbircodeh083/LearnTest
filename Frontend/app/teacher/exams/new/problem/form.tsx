@@ -332,7 +332,7 @@ export function ProblemForm({ initial }: { initial?: ProblemFormInitial }) {
       <div className="mt-4 grid items-start gap-5 xl:grid-cols-3">
         <div className="space-y-5 xl:col-span-2">
           {/* Basic information */}
-          <section className="rounded-xl border border-line bg-card p-5 sm:p-6" aria-label="Basic Information">
+          <section className="rounded-xl border border-line bg-card p-5 sm:p-6 card-hover" aria-label="Basic Information">
             <h2 className="text-[17px] font-bold">Basic Information</h2>
             <div className="mt-3 grid gap-4 sm:grid-cols-2">
               <div>
@@ -390,7 +390,7 @@ export function ProblemForm({ initial }: { initial?: ProblemFormInitial }) {
           </section>
 
           {/* Problem list */}
-          <section className="rounded-xl border border-line bg-card p-5 sm:p-6" aria-label="Problem List">
+          <section className="rounded-xl border border-line bg-card p-5 sm:p-6 card-hover" aria-label="Problem List">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-[17px] font-bold">Problem List</h2>
               <p className="text-sm text-muted">Total Problems: {itemCount}</p>
@@ -561,7 +561,7 @@ export function ProblemForm({ initial }: { initial?: ProblemFormInitial }) {
 
         {/* right rail */}
         <aside className="space-y-5 xl:sticky xl:top-20">
-          <section className="rounded-xl border border-line bg-card p-5" aria-label="Test Settings">
+          <section className="rounded-xl border border-line bg-card p-5 card-hover" aria-label="Test Settings">
             <h2 className="text-[17px] font-bold">Test Settings</h2>
             <div className="mt-3 grid grid-cols-2 gap-3">
               <div>
@@ -608,7 +608,7 @@ export function ProblemForm({ initial }: { initial?: ProblemFormInitial }) {
             </div>
           </section>
 
-          <section className="rounded-xl border border-line bg-card p-5" aria-label="Student View Preview">
+          <section className="rounded-xl border border-line bg-card p-5 card-hover" aria-label="Student View Preview">
             <h2 className="text-[17px] font-bold">Student View Preview</h2>
             <div className="mt-2 flex gap-4 border-b border-line text-sm font-semibold" role="tablist" aria-label="Preview tabs">
               {(["desc", "list"] as const).map((t) => (
@@ -701,7 +701,7 @@ export function ProblemForm({ initial }: { initial?: ProblemFormInitial }) {
             )}
           </section>
 
-          <section className="rounded-xl border border-line bg-card p-5" aria-label="Test Summary">
+          <section className="rounded-xl border border-line bg-card p-5 card-hover" aria-label="Test Summary">
             <h2 className="text-[17px] font-bold">Test Summary</h2>
             <dl className="mt-3 space-y-2 text-sm">
               {[

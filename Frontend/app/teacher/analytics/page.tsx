@@ -234,7 +234,7 @@ function StatCard({ href, iconBox, label, value, delta, sub }: {
   href: string; iconBox: React.ReactNode; label: string; value: string; delta: string; sub: string;
 }) {
   return (
-    <Link href={href} className="flex items-center gap-4 rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] transition hover:shadow-[0_4px_12px_rgba(16,24,40,0.10)]">
+    <Link href={href} className="flex items-center gap-4 rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] card-hover">
       {iconBox}
       <span className="min-w-0 flex-1">
         <span className="block text-[13px] text-muted">{label}</span>
@@ -357,7 +357,7 @@ export default function TeacherAnalysisPage() {
             </div>
 
             {/* activity chart */}
-            <section className="mt-4 w-full max-w-full overflow-hidden rounded-xl border border-line bg-card p-4 shadow-[0_1px_2px_rgba(16,24,40,0.05)] sm:p-6" aria-label="Activity Over Time">
+            <section className="mt-4 w-full max-w-full overflow-hidden rounded-xl border border-line bg-card p-4 shadow-[0_1px_2px_rgba(16,24,40,0.05)] sm:p-6 card-hover" aria-label="Activity Over Time">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-[17px] font-bold">Activity Over Time</h2>
               </div>
@@ -368,7 +368,7 @@ export default function TeacherAnalysisPage() {
             </section>
 
             {/* earnings chart — last 5 months */}
-            <section className="mt-4 w-full max-w-full overflow-hidden rounded-xl border border-line bg-card p-4 shadow-[0_1px_2px_rgba(16,24,40,0.05)] sm:p-6" aria-label="Earnings by Month">
+            <section className="mt-4 w-full max-w-full overflow-hidden rounded-xl border border-line bg-card p-4 shadow-[0_1px_2px_rgba(16,24,40,0.05)] sm:p-6 card-hover" aria-label="Earnings by Month">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-[17px] font-bold">Earnings by Month</h2>
                 <span className="inline-flex items-center gap-1.5 text-[13px] font-medium">

@@ -1,14 +1,16 @@
 "use client";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Empty, FieldError, Loading, useToast } from "@/components/ui";
-import { apiPatch, ApiError } from "@/lib/api";
+import { Empty, FieldError, Loading, useToast, Btn } from "@/components/ui";
+import { ChangePasswordCard } from "@/components/ChangePasswordCard";
+import { apiDelete, apiPatch, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
 type Section = "general" | "account" | "security";
 type AccountType = "bank" | "mobile";
 
 const inputCls = "w-full rounded-lg border border-line bg-card px-3.5 py-2.5 text-[15px] text-ink placeholder:text-muted/70 shadow-[0_1px_3px_rgba(16,24,40,0.10)] outline-none focus:border-line focus:shadow-[0_2px_8px_rgba(16,24,40,0.12)]";
-const cardCls = "rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] sm:p-6";
+const cardCls = "rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] sm:p-6 card-hover";
 
 function Label({ children }: { children: React.ReactNode }) {
   return <span className="mb-1.5 block text-[15px] font-medium">{children}</span>;
@@ -20,6 +22,98 @@ const BANKS = [
   "Janata Bank PLC", "Agrani Bank PLC", "Standard Chartered Bank", "HSBC Bangladesh", "Other",
 ];
 const PROVIDERS = ["bKash", "Nagad", "Rocket"];
+
+function DeleteAccountSection() {
+  const { user, signOut } = useAuth();
+  const router = useRouter();
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmText, setConfirmText] = useState("");
+
+  const handleDelete = async () => {
+    if (!password) {
+      setError("Password is required.");
+      return;
+    }
+    if (confirmText !== "DELETE") {
+      setError('Please type "DELETE" to confirm.');
+      return;
+    }
+    setDeleting(true);
+    setError("");
+    try {
+      await apiDelete("/api/v1/me", { password });
+      await signOut();
+      toast("Account deleted.");
+      router.replace("/");
+    } catch (e) {
+      const message = e instanceof ApiError ? e.message : "Could not delete account.";
+      setError(message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <section aria-label="Delete account" className="mt-6">
+      <button
+        type="button"
+        onClick={() => { setPassword(""); setConfirmText(""); setError(""); setOpen(true); }}
+        className="block w-full rounded-xl border border-dashed border-danger p-4 text-left transition hover:bg-dangersoft"
+      >
+        <span className="flex items-center justify-between gap-3">
+          <span>
+            <span className="block text-[16px] font-bold text-danger">Delete Account</span>
+            <span className="mt-0.5 block text-[13px] text-muted">
+              Permanently delete your account and all your data. This cannot be undone.
+            </span>
+          </span>
+          <svg viewBox="0 0 24 24" aria-hidden className="h-5 w-5 shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="m9 6 6 6-6 6" /></svg>
+        </span>
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Delete Account">
+          <button aria-label="Close" className="animate-fade-in absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={() => setOpen(false)} />
+          <aside className="animate-drawer-in absolute inset-y-0 right-0 flex w-full max-w-sm flex-col bg-card shadow-xl">
+            <div className="flex items-center justify-between gap-3 border-b border-line p-5">
+              <div>
+                <h3 className="text-[17px] font-bold">Delete Account</h3>
+                <p className="text-[13px] text-muted">This action cannot be undone.</p>
+              </div>
+              <button type="button" onClick={() => setOpen(false)} aria-label="Close"
+                className="rounded-lg p-1.5 text-muted hover:bg-soft hover:text-ink">✕</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5">
+              {error && <p role="alert" className="mb-3 rounded-lg bg-dangersoft px-3 py-2 text-[13px] font-medium text-danger">{error}</p>}
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">Enter your password</label>
+                  <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Password" className={inputCls} />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">Type <span className="font-mono text-danger">DELETE</span> to confirm</label>
+                  <input value={confirmText} onChange={(e) => setConfirmText(e.target.value)}
+                    placeholder="DELETE" className={inputCls} />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-line p-5">
+              <Btn variant="ghost" onClick={() => setOpen(false)}>Cancel</Btn>
+              <Btn variant="danger" onClick={handleDelete} disabled={deleting || password === "" || confirmText !== "DELETE"}>
+                {deleting ? "Deleting…" : "Delete Account"}
+              </Btn>
+            </div>
+          </aside>
+        </div>
+      )}
+    </section>
+  );
+}
 
 export default function TeacherSettingsPage() {
   const { user, loading, refresh } = useAuth();
@@ -118,13 +212,18 @@ export default function TeacherSettingsPage() {
               ))}
             </nav>
 
-            {section !== "account" ? (
-              <section className={cardCls} aria-label={section === "general" ? "General" : "Password and Security"}>
-                <Empty
-                  title={section === "general" ? "General preferences coming soon" : "Password management coming soon"}
-                  body={section === "general"
-                    ? "Notification and display preferences will live here."
-                    : "Changing your password needs a dedicated auth endpoint, which is not wired up yet."} />
+            {section === "general" ? (
+              <section className={cardCls} aria-label="General">
+                <Empty title="General preferences coming soon" body="Notification and display preferences will live here." />
+              </section>
+            ) : section === "security" ? (
+              <section className={cardCls} aria-label="Password and Security">
+                <h2 className="text-xl font-bold tracking-tight">Password &amp; Security</h2>
+                <p className="mt-0.5 text-sm text-muted">Update the password you use to sign in.</p>
+    <div className="mt-4">
+      <ChangePasswordCard />
+      <DeleteAccountSection />
+    </div>
               </section>
             ) : (
               <div className="grid items-start gap-5 xl:grid-cols-5">

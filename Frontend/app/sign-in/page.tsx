@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { AuthCard } from "@/components/AuthCard";
 import { FormSkeleton } from "@/components/Skeleton";
 import { Btn, Field, inputCls, Notice } from "@/components/ui";
+import { PasswordField } from "@/components/PasswordField";
 import { apiPost, ApiError, API_BASE } from "@/lib/api";
 import { useAuth, roleHome, useRedirectIfSignedIn } from "@/lib/auth";
 import { safeExternalUrl, safeReturnTo } from "@/lib/url";
@@ -15,6 +16,8 @@ function SignInForm() {
   const search = useSearchParams();
   const rawReturn = search.get("returnTo");
   const returnTo = safeReturnTo(rawReturn) || null;
+  const resetDone = search.get("reset") === "1";
+  const invalidResetToken = search.get("error") === "INVALID_TOKEN";
   const { refresh } = useAuth();
   // Signed-in users cannot stay on this page — sent to their workspace.
   const { user, loading: authLoading } = useRedirectIfSignedIn(returnTo);
@@ -74,10 +77,25 @@ function SignInForm() {
 
   const forgot = async () => {
     if (checkEmail(form.email)) { setErrors({ email: "Enter a valid email first, then choose Forgot password." }); return; }
+    setServerError("");
+    setResetSent(false);
     try {
-      await apiPost("/api/auth/forget-password", { email: form.email.trim(), redirectTo: `${window.location.origin}/sign-in` });
+      // Better Auth's real endpoint. Unknown emails deliberately return 200,
+      // so any error here is a rate limit or a mail/server failure.
+      await apiPost("/api/auth/request-password-reset", {
+        email: form.email.trim(),
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
       setResetSent(true);
-    } catch { setResetSent(true); /* do not reveal whether the email exists */ }
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 429) {
+        setServerError("Too many reset requests. Please wait a minute and try again.");
+      } else if (err instanceof ApiError && err.status >= 500) {
+        setServerError("We could not send the reset email right now. Please try again shortly.");
+      } else {
+        setServerError(err instanceof ApiError ? err.message : "Could not send the reset email. Check your connection and try again.");
+      }
+    }
   };
 
   const social = async (provider: "google" | "github") => {
@@ -106,6 +124,8 @@ function SignInForm() {
     <AuthCard title="Welcome back" sub="Sign in with the email you registered with.">
       <form onSubmit={submit} noValidate className="space-y-4">
         {serverError && <Notice tone="red">{serverError}</Notice>}
+        {resetDone && <Notice tone="blue">Password updated. Sign in with your new password.</Notice>}
+        {invalidResetToken && <Notice tone="red">That reset link is invalid or has expired. Request a new one below.</Notice>}
         {unverified && (
           <div className="rounded-xl border border-line bg-soft p-4 text-sm">
             <p className="font-semibold">Didn&apos;t get the email?</p>
@@ -120,9 +140,14 @@ function SignInForm() {
         <Field label="Email" error={errors.email}>
           <input className={inputCls} type="email" autoComplete="email" value={form.email} onChange={(e) => { setForm({ ...form, email: e.target.value }); setErrors((p) => ({ ...p, email: "" })); }} placeholder="you@example.com" />
         </Field>
-        <Field label="Password" error={errors.password}>
-          <input className={inputCls} type="password" autoComplete="current-password" value={form.password} onChange={(e) => { setForm({ ...form, password: e.target.value }); setErrors((p) => ({ ...p, password: "" })); }} placeholder="Your password" />
-        </Field>
+        <PasswordField
+          label="Password"
+          autoComplete="current-password"
+          placeholder="Your password"
+          value={form.password}
+          onChange={(password) => { setForm({ ...form, password }); setErrors((p) => ({ ...p, password: "" })); }}
+          error={errors.password}
+        />
         <div className="text-right">
           <button type="button" onClick={forgot} className="text-sm font-semibold text-brandstrong">Forgot password?</button>
         </div>

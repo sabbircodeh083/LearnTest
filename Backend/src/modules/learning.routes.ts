@@ -78,6 +78,14 @@ export function learningRouter(deps: { requireAuth: any; verified: any[]; option
     const { skip, limit } = paginate(q(req));
     const mine = req.query.mine === "1" && req.user ? true : false;
     const filter: any = mine ? { ownerId: req.user!.id } : { status: "published", visibility: "public" };
+    const esc = String(q(req).search ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (esc) {
+      filter.$or = [
+        { videoId: { $regex: esc, $options: "i" } },
+        { title: { $regex: esc, $options: "i" } },
+        { description: { $regex: esc, $options: "i" } },
+      ];
+    }
     const [docs, total] = await Promise.all([Exam.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(), Exam.countDocuments(filter)]);
     // Owners keep their question IDs; everyone else gets only the count.
     const items = docs.map((e: any) => {

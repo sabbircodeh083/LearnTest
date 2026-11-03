@@ -143,7 +143,7 @@ export function PlaylistForm({ initial }: { initial?: Playlist }) {
       <div className="mt-4 grid items-start gap-5 xl:grid-cols-3">
         <div className="space-y-5 xl:col-span-2">
           {/* Basic information */}
-          <section className="rounded-xl border border-line bg-card p-5 sm:p-6" aria-label="Basic Information">
+          <section className="rounded-xl border border-line bg-card p-5 sm:p-6 card-hover" aria-label="Basic Information">
             <h2 className="text-[17px] font-bold">Basic Information</h2>
             <div className="mt-3">
               <Label required>Title</Label>
@@ -170,7 +170,7 @@ export function PlaylistForm({ initial }: { initial?: Playlist }) {
           </section>
 
           {/* Videos */}
-          <section className="rounded-xl border border-line bg-card p-5 sm:p-6" aria-label="Playlist Videos">
+          <section className="rounded-xl border border-line bg-card p-5 sm:p-6 card-hover" aria-label="Playlist Videos">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-[17px] font-bold">Videos</h2>
               <p className="text-sm text-muted">Total Videos: {videoIds.length}</p>
@@ -221,7 +221,7 @@ export function PlaylistForm({ initial }: { initial?: Playlist }) {
 
         {/* right rail */}
         <aside className="space-y-5 xl:sticky xl:top-20">
-          <section className="rounded-xl border border-line bg-card p-5" aria-label="Playlist Settings">
+          <section className="rounded-xl border border-line bg-card p-5 card-hover" aria-label="Playlist Settings">
             <h2 className="text-[17px] font-bold">Playlist Settings</h2>
             <div className="mt-3 grid grid-cols-2 gap-3">
               <div>
@@ -243,7 +243,7 @@ export function PlaylistForm({ initial }: { initial?: Playlist }) {
             </div>
           </section>
 
-          <section className="rounded-xl border border-line bg-card p-5" aria-label="Student View Preview">
+          <section className="rounded-xl border border-line bg-card p-5 card-hover" aria-label="Student View Preview">
             <h2 className="text-[17px] font-bold">Student View Preview</h2>
             <div className="mt-3">
               <div className="flex items-start justify-between gap-2">
@@ -266,7 +266,7 @@ export function PlaylistForm({ initial }: { initial?: Playlist }) {
             </div>
           </section>
 
-          <section className="rounded-xl border border-line bg-card p-5" aria-label="Playlist Summary">
+          <section className="rounded-xl border border-line bg-card p-5 card-hover" aria-label="Playlist Summary">
             <h2 className="text-[17px] font-bold">Playlist Summary</h2>
             <dl className="mt-3 space-y-2 text-sm">
               {[

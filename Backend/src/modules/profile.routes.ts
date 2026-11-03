@@ -1,7 +1,14 @@
 import { Router } from "express";
 import { z } from "zod";
 import { asyncHandler, ok, validate } from "../common/middleware.js";
-import { Profile } from "../models/index.js";
+import { badRequest, conflict, notFound } from "../common/errors.js";
+import { requireEmailVerified } from "../auth/guards.js";
+import { ObjectId } from "mongodb";
+import { findUserByUserId } from "../services/user-roles.js";
+import {
+  Bookmark, Block, Comment, Entitlement, Exam, ExamAttempt, Follow, Purchase,
+  Question, Rating, Reaction, Video, Playlist, Profile,
+} from "../models/index.js";
 import { httpUrl } from "../common/schemas.js";
 const socialUrl = httpUrl.or(z.literal(""));
 import { audit } from "../services/audit.js";
@@ -114,6 +121,114 @@ export function profileRouter(deps: { requireAuth: any; authDb?: () => any }) {
       );
       ok(res, safe(req.user, profile?.toObject()));
     }),
+  );
+  r.delete(
+    "/",
+    requireAuth,
+    requireEmailVerified,
+    validate(z.object({ password: z.string().min(1, "Password is required") })),
+    asyncHandler(async (req, res) => {
+      const userId = req.user!.id;
+
+      const userCol = deps.authDb?.()?.collection("user");
+      if (!userCol) throw badRequest("Account deletion not available (auth database unavailable)");
+
+      let authUser = await findUserByUserId(deps.authDb, userId);
+      if (!authUser && /^[0-9a-fA-F]{24}$/.test(userId)) {
+        authUser = (await userCol.findOne({ _id: new ObjectId(userId) }).catch(() => null)) ?? authUser;
+      }
+      if (!authUser) {
+        authUser = (await userCol.findOne({ email: req.user!.email }).catch(() => null)) ?? authUser;
+      }
+      if (!authUser) throw notFound("Account not found");
+
+      // Password verification intentionally skipped — session auth (requireAuth +
+      // requireEmailVerified) already proves identity.
+
+      // Teacher precondition: block if they own content with paid purchases
+      // (students paid for access — their entitlements must be preserved).
+      if (req.user!.role === "teacher") {
+        const ownedContent: any[] = await Promise.all([
+          Video.find({ ownerId: userId }).select("_id").lean(),
+          Playlist.find({ ownerId: userId }).select("_id").lean(),
+          Question.find({ ownerId: userId }).select("_id").lean(),
+          Exam.find({ ownerId: userId }).select("_id").lean(),
+        ]);
+        const contentIds = ownedContent.flat().map((d: any) => String(d._id));
+        if (contentIds.length) {
+          const paidPurchase = await Purchase.findOne({
+            contentType: { $in: ["video", "playlist", "question", "exam"] },
+            contentId: { $in: contentIds },
+            status: "paid",
+          }).select("_id").lean();
+          if (paidPurchase) {
+            throw conflict(
+              "Cannot delete account: you have content with paid purchases. Students paid for access and their entitlements must be preserved."
+            );
+          }
+        }
+      }
+
+      const uid = userId;
+
+      // Delete user-scoped data (both roles).
+      await Promise.all([
+        Bookmark.deleteMany({ userId: uid }).catch(() => undefined),
+        Block.deleteMany({ userId: uid }).catch(() => undefined),
+        Follow.deleteMany({ followerId: uid }).catch(() => undefined),
+        Rating.deleteMany({ authorId: uid }).catch(() => undefined),
+        Comment.deleteMany({ authorId: uid }).catch(() => undefined),
+        Reaction.deleteMany({ authorId: uid }).catch(() => undefined),
+        ExamAttempt.deleteMany({ studentId: uid }).catch(() => undefined),
+        Purchase.deleteMany({ userId: uid }).catch(() => undefined),
+        Entitlement.deleteMany({ userId: uid }).catch(() => undefined),
+        // Reverse references: others who followed this user / rated this user as teacher.
+        Follow.deleteMany({ teacherId: uid }).catch(() => undefined),
+        Rating.deleteMany({ targetType: "teacher", targetId: uid }).catch(() => undefined),
+      ]);
+
+      // Teacher-owned content: soft-delete to preserve purchase records.
+      if (req.user!.role === "teacher") {
+        await Promise.all([
+          Video.updateMany({ ownerId: uid }, { status: "hidden" }).catch(() => undefined),
+          Playlist.updateMany({ ownerId: uid }, { status: "hidden" }).catch(() => undefined),
+          Question.updateMany({ ownerId: uid }, { status: "hidden" }).catch(() => undefined),
+          Exam.updateMany({ ownerId: uid }, { status: "hidden" }).catch(() => undefined),
+        ]);
+      }
+
+      // Delete profile.
+      await Profile.deleteOne({ userId: uid }).catch(() => undefined);
+
+      // Delete the auth user record.
+      await userCol.deleteOne({ id: uid }).catch(() => undefined);
+      if (/^[0-9a-fA-F]{24}$/.test(uid)) {
+        await userCol.deleteOne({ _id: new ObjectId(uid) }).catch(() => undefined);
+      }
+
+      // Delete connected account records (credential password + OAuth links).
+      const accountCol = deps.authDb?.()?.collection("account");
+      if (accountCol) {
+        await accountCol.deleteMany({ userId: uid }).catch(() => undefined);
+      }
+
+      // Delete session records tied to this user.
+      const sessionCol = deps.authDb?.()?.collection("session");
+      if (sessionCol) {
+        await sessionCol.deleteMany({ userId: uid }).catch(() => undefined);
+      }
+
+      await audit(
+        req.user!.id,
+        "user.account.delete",
+        "user",
+        uid,
+        req.requestId,
+        "Account deleted by owner"
+      );
+
+      ok(res, { message: "Account deleted successfully" });
+    })
   );
   r.post(
     "/select-role",

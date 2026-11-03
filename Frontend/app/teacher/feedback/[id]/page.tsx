@@ -8,7 +8,7 @@ import { useFetch } from "@/lib/hooks";
 import { fmtDate, idOf, type Exam, type ExamAttemptRow, type Page, type Question } from "@/lib/types";
 
 const inputCls = "w-full rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink placeholder:text-muted/70 shadow-[0_1px_3px_rgba(16,24,40,0.10)] outline-none focus:border-line";
-const cardCls = "rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)]";
+const cardCls = "rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] card-hover";
 const gradeBtnCls = "inline-flex items-center justify-center gap-2 rounded-xl bg-[#16a34a] px-4 py-3 text-sm font-semibold text-white hover:bg-[#15803d] disabled:opacity-50";
 
 const KIND_META: Record<string, { label: string; box: string; icon: React.ReactNode }> = {

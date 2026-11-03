@@ -44,7 +44,7 @@ function ResultInner() {
       <p className="mt-2 text-sm text-muted">
         This page never unlocks content by itself. Access is granted only after the server validates the payment with SSLCOMMERZ.
       </p>
-      <div className="mt-6 rounded-2xl border border-line bg-card p-6">
+      <div className="mt-6 rounded-2xl border border-line bg-card p-6 card-hover">
         {state === "checking" && <Loading label="Checking your payment with the server…" />}
         {state === "signed-out" && (
           <>

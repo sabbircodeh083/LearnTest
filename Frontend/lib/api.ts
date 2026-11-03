@@ -56,7 +56,8 @@ export const apiPost = <T,>(path: string, data?: unknown) =>
   api<T>(path, { method: "POST", body: data === undefined ? undefined : JSON.stringify(data) });
 export const apiPatch = <T,>(path: string, data?: unknown) =>
   api<T>(path, { method: "PATCH", body: data === undefined ? undefined : JSON.stringify(data) });
-export const apiDelete = <T,>(path: string) => api<T>(path, { method: "DELETE" });
+export const apiDelete = <T,>(path: string, data?: unknown) =>
+  api<T>(path, { method: "DELETE", body: data === undefined ? undefined : JSON.stringify(data) });
 
 export async function apiUpload<T>(path: string, file: File, fields: Record<string, string> = {}): Promise<T> {
   const form = new FormData();

@@ -63,7 +63,7 @@ function SourceCard({ active, onClick, icon, title, body, disabled }: {
 }) {
   return (
     <button type="button" role="radio" aria-checked={active} onClick={onClick} disabled={disabled}
-      className={`flex flex-1 items-start gap-3 rounded-xl border bg-card p-4 text-left transition disabled:cursor-not-allowed ${active ? "border-[#22c55e] bg-[#f0fdf4] dark:bg-brandsoft" : "border-line hover:border-muted"}`}>
+      className={`flex flex-1 items-start gap-3 rounded-xl border bg-card p-4 text-left transition disabled:cursor-not-allowed card-hover ${active ? "border-[#22c55e] bg-[#f0fdf4] dark:bg-brandsoft" : "border-line hover:border-muted"}`}>
       <span aria-hidden className={active ? "text-[#16a34a]" : "text-muted"}>{icon}</span>
       <span className="min-w-0 flex-1">
         <span className="block text-[15px] font-semibold">{title}</span>
@@ -249,7 +249,7 @@ export function VideoForm({ initial }: { initial?: Video }) {
           {error && <Notice tone="red">{error}</Notice>}
 
           {source === "youtube" ? (
-            <section className="rounded-xl border border-line bg-card p-5 sm:p-6" aria-label="YouTube Video Details">
+            <section className="rounded-xl border border-line bg-card p-5 sm:p-6 card-hover" aria-label="YouTube Video Details">
               <h2 className="text-lg font-bold">YouTube Video Details</h2>
               <div className="mt-4">
                 <Label required>YouTube Video ID</Label>
@@ -324,7 +324,7 @@ export function VideoForm({ initial }: { initial?: Video }) {
               </div>
             </section>
           ) : (
-            <section className="rounded-xl border border-line bg-card p-5 sm:p-6" aria-label="Upload Video">
+            <section className="rounded-xl border border-line bg-card p-5 sm:p-6 card-hover" aria-label="Upload Video">
               <h2 className="text-lg font-bold">Upload Video</h2>
               {editing ? (
                 <div className="mt-4 flex w-full flex-col items-center rounded-xl border-2 border-dashed border-line bg-soft/60 px-4 py-10 text-center">
@@ -434,7 +434,7 @@ export function VideoForm({ initial }: { initial?: Video }) {
 
         {/* preview column */}
         <aside className="space-y-5 lg:sticky lg:top-20">
-          <section className="rounded-xl border border-line bg-card p-5" aria-label="Video Preview">
+          <section className="rounded-xl border border-line bg-card p-5 card-hover" aria-label="Video Preview">
             <h2 className="text-lg font-bold">Video Preview</h2>
             <p className="text-sm text-muted">This is how your video will appear to students.</p>
             <div className="mt-3 overflow-hidden rounded-lg bg-black">

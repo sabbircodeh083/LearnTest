@@ -11,7 +11,7 @@ import { fmtDate } from "@/lib/types";
 
 type Tab = "overview" | "reviews";
 
-const cardCls = "rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)]";
+const cardCls = "rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] card-hover";
 
 interface AdminUserDetail {
   userId: string;
@@ -42,7 +42,7 @@ function initialsOf(name: string) {
 
 function StatMini({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
   return (
-    <div className="flex items-center gap-4 rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)]">
+    <div className="flex items-center gap-4 rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] card-hover">
       {icon}
       <div>
         <p className="text-[22px] font-bold leading-none tracking-tight">{value}</p>

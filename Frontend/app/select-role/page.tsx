@@ -37,11 +37,11 @@ export default function SelectRolePage() {
     <AuthCard title="How will you use LearnTest?" sub="Choose once. This decides your workspace and cannot be switched from settings.">
       {error && <Notice tone="red">{error}</Notice>}
       <div className="mt-2 grid gap-3">
-        <button disabled={busy} onClick={() => choose("student")} className="rounded-xl border border-line bg-card p-5 text-left hover:border-brand disabled:opacity-50">
+        <button disabled={busy} onClick={() => choose("student")} className="rounded-xl border border-line bg-card p-5 text-left hover:border-brand disabled:opacity-50 card-hover">
           <span className="font-display text-lg font-bold">Student</span>
           <span className="mt-1 block text-sm text-muted">Discover questions, watch lessons, take exams, and submit assignments.</span>
         </button>
-        <button disabled={busy} onClick={() => choose("teacher")} className="rounded-xl border border-line bg-card p-5 text-left hover:border-brand disabled:opacity-50">
+        <button disabled={busy} onClick={() => choose("teacher")} className="rounded-xl border border-line bg-card p-5 text-left hover:border-brand disabled:opacity-50 card-hover">
           <span className="font-display text-lg font-bold">Teacher</span>
           <span className="mt-1 block text-sm text-muted">Publish videos and questions, create exams, and grade student work.</span>
         </button>

@@ -72,7 +72,7 @@ export default function TeacherPlaylistsPage() {
               const pid = String(p._id);
               const thumb = thumbOf(p);
               return (
-                <li key={pid} className="rounded-xl border border-line bg-card p-4">
+                <li key={pid} className="rounded-xl border border-line bg-card p-4 card-hover">
                   <div className="flex items-center gap-3">
                     {thumb ? (
                       // eslint-disable-next-line @next/next/no-img-element

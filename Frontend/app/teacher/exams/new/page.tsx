@@ -143,7 +143,7 @@ export default function CreateTestPickerPage() {
               role="radio"
               aria-checked={active}
               onClick={() => setPicked(c.key)}
-              className={`rounded-2xl border bg-card p-6 text-left transition sm:p-7 ${active ? "border-[#16a34a] shadow-[0_0_0_1px_#16a34a]" : "border-line hover:border-muted"}`}
+              className={`rounded-2xl border bg-card p-6 text-left sm:p-7 ${active ? "border-[#16a34a] shadow-[0_0_0_1px_#16a34a]" : "border-line hover:border-muted card-hover"}`}
             >
               <div className="flex items-start justify-between gap-3">
                 <span

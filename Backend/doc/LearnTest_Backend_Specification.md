@@ -307,8 +307,8 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: true,
-    minPasswordLength: 8,
-    maxPasswordLength: 128,
+    minPasswordLength: 12,
+    maxPasswordLength: 128, // sign-in compatibility; new passwords are capped at 72 UTF-8 bytes
     password: {
       hash: async (password) => bcrypt.hash(password, 12),
       verify: async ({ hash, password }) => bcrypt.compare(password, hash),
@@ -320,6 +320,11 @@ export const auth = betterAuth({
 - The hash callback receives the plaintext password and returns the bcrypt hash. The verify callback compares the submitted password with the stored hash; never write bcrypt.compare in a public route.
 - A cost factor of 12 is an initial recommendation, not a universal value; benchmark on the target host and choose a cost that is secure without making login vulnerable to resource exhaustion.
 - Keep password length validation and rate limits. Never log or return plaintext passwords or password hashes.
+- Password policy (enforced server-side on signup, reset, and change):
+  - at least 12 characters;
+  - at least one uppercase letter, one lowercase letter, and one symbol (digits are optional);
+  - at most 72 UTF-8 bytes, a technical limit because bcrypt silently truncates longer values.
+- Enforce the policy in a Better Auth `hooks.before` handler for `/sign-up/email`, `/reset-password`, `/change-password`, and `/set-password`; never for sign-in, so existing accounts with older passwords still work.
 - Test signup, login with correct and incorrect passwords, password reset, password change, and email verification after configuring bcrypt.
 - Do not silently change hashing algorithms after real users exist. If the algorithm changes later, implement a verified migration/rehash strategy.
 

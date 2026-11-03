@@ -112,7 +112,7 @@ export function LockedPayGate({ previewPath, contentType, contentId, backHref, b
       <Link href={backHref} className="text-sm font-semibold text-brandstrong">← {backLabel}</Link>
       <h1 className="mt-3 font-display text-3xl font-bold">{p.title}</h1>
       <p className="mt-1 text-sm text-muted">This is a paid {contentType} — pay once to unlock it.</p>
-      <div className="mt-4 rounded-2xl border border-line bg-card p-6">
+      <div className="mt-4 rounded-2xl border border-line bg-card p-6 card-hover">
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone="amber">{priceLabel(p.price, p.currency)} · Paid</Badge>
         </div>
@@ -209,7 +209,7 @@ export function Engagement({ targetType, targetId }: { targetType: ContentType; 
         {!loaded ? <p className="text-sm text-muted">Loading comments…</p> :
           comments.length === 0 ? <p className="text-sm text-muted">No comments yet. Be the first to ask a question.</p> :
           comments.map((c) => (
-            <article key={c._id} className="rounded-lg border border-line bg-card p-3">
+            <article key={c._id} className="rounded-lg border border-line bg-card p-3 card-hover">
               <p className="text-sm">{c.content}</p>
               <p className="mt-1 text-xs text-muted">{new Date(c.createdAt).toLocaleString()}</p>
             </article>

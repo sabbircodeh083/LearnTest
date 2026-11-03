@@ -199,6 +199,7 @@ export const openapi = {
     "/api/v1/purchases/statement": { get: { summary: "Student purchase statements with content title + teacher (paginated, search/type filters)", security: [{ cookieAuth: [] }] } },
     "/api/v1/videos/{id}": { get: { summary: "Video detail (paid gate applies)" }, patch: { summary: "Update video (owner)", security: [{ cookieAuth: [] }] }, delete: { summary: "Hide video, or hard-delete with ?hard=true when no paying students", security: [{ cookieAuth: [] }] } },
     "/api/v1/videos/{id}/preview": { get: { summary: "Video pay-gate preview (safe metadata + price + entitlement, never playback IDs)" } },
+    "/api/v1/videos/{id}/media": { get: { summary: "Authorized inline stream for uploaded videos (byte-range/206 so the player can buffer and seek)", security: [{ cookieAuth: [] }] } },
     "/api/v1/playlists/{id}": { get: { summary: "Playlist detail (paid gate applies)" }, patch: { summary: "Update playlist (owner)", security: [{ cookieAuth: [] }] }, delete: { summary: "Hide playlist, or hard-delete with ?hard=true when no paying students", security: [{ cookieAuth: [] }] } },
     "/api/v1/questions/{id}": { get: { summary: "Question detail (answers stripped unless authorized)" }, patch: { summary: "Update question (owner)", security: [{ cookieAuth: [] }] }, delete: { summary: "Hide question (soft delete)", security: [{ cookieAuth: [] }] } },
     "/api/v1/questions/{id}/preview": { get: { summary: "Question pay-gate preview (stripped metadata + price + entitlement)" } },

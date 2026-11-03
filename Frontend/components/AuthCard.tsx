@@ -10,7 +10,7 @@ export function AuthCard({ title, sub, children }: { title: string; sub: string;
         <ThemeToggle />
       </header>
       <main className="flex flex-1 items-center justify-center px-4 py-8">
-        <div className="w-full max-w-md rounded-2xl border border-line bg-card p-6 sm:p-8">
+        <div className="w-full max-w-md rounded-2xl border border-line bg-card p-6 sm:p-8 card-hover">
           <h1 className="font-display text-2xl font-bold">{title}</h1>
           <p className="mt-1 text-sm text-muted">{sub}</p>
           <div className="mt-6">{children}</div>

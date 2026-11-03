@@ -10,7 +10,7 @@ import { AvatarImg, CoverBanner } from "@/components/profile";
 import type { UploadDoc } from "@/lib/types";
 
 const inputCls = "w-full rounded-lg border border-line bg-card px-3.5 py-2.5 text-[15px] text-ink placeholder:text-muted/70 shadow-[0_1px_3px_rgba(16,24,40,0.10)] outline-none focus:border-line focus:shadow-[0_2px_8px_rgba(16,24,40,0.12)] disabled:opacity-60";
-const cardCls = "rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] sm:p-6";
+const cardCls = "rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] sm:p-6 card-hover";
 
 function Label({ children }: { children: React.ReactNode }) {
   return <span className="mb-1.5 block text-sm text-muted">{children}</span>;
@@ -176,7 +176,7 @@ export default function EditTeacherProfilePage() {
           <div className="mt-4 grid items-start gap-5 xl:grid-cols-3">
             <div className="space-y-5 xl:col-span-2">
               {/* cover + photo */}
-              <section className="overflow-hidden rounded-xl border border-line bg-card shadow-[0_1px_2px_rgba(16,24,40,0.05)]" aria-label="Cover and photo">
+              <section className="overflow-hidden rounded-xl border border-line bg-card shadow-[0_1px_2px_rgba(16,24,40,0.05)] card-hover" aria-label="Cover and photo">
                 <div className="relative h-36 bg-gradient-to-r from-[#3b5bdb] via-[#748ffc] to-[#9775fa] sm:h-44" role="img" aria-label="Profile cover">
                   {coverPreview ? (
                     // eslint-disable-next-line @next/next/no-img-element

@@ -87,7 +87,7 @@ export default function AdminReportedContentPage({ params }: { params: Promise<{
       ) : (
         <ul className="mt-2 space-y-2">
           {data.recentReports.map((r) => (
-            <li key={r._id} className="rounded-xl border border-line bg-card p-3">
+            <li key={r._id} className="rounded-xl border border-line bg-card p-3 card-hover">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge>{r.status}</Badge>
                 <span className="text-xs text-muted">{fmtDate(r.createdAt)} · Reporter {r.reporterId}</span>

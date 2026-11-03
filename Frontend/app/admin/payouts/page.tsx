@@ -213,7 +213,7 @@ function ManageModal({ teacher, onClose, onDone }: { teacher: TeacherPayout; onC
 function PayoutCard({ t, onManage }: { t: TeacherPayout; onManage: () => void }) {
   const [expanded, setExpanded] = useState(false);
   return (
-    <article className="rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)]">
+    <article className="rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] card-hover">
       <div className="flex items-start gap-3">
         <span aria-hidden className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#e8f1fe] text-[15px] font-bold text-[#1d6ce0]">
           {initialsOf(t.name, t.email)}

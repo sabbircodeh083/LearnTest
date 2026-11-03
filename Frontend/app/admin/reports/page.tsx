@@ -26,7 +26,7 @@ export default function AdminReportsPage() {
       {loading ? <Loading label="Loading reports…" /> : error ? <ErrorBox message={error} onRetry={retry} /> :
         !data?.items.length ? <Empty title="No reports" body="No user reports are waiting." /> : (
           <ul className="space-y-3">{data.items.map((r) => (
-            <li key={r._id} className="rounded-xl border border-line bg-card p-4">
+            <li key={r._id} className="rounded-xl border border-line bg-card p-4 card-hover">
               <div className="flex flex-wrap items-center gap-2"><Badge tone="blue">{r.targetType}</Badge><Badge>{r.status}</Badge><span className="text-xs text-muted">{fmtDate(r.createdAt)} · Target {r.targetId}</span></div>
               <p className="mt-2 text-sm">{r.reason}</p>
               <div className="mt-3 flex flex-wrap gap-2">

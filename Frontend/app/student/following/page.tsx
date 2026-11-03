@@ -50,7 +50,7 @@ export default function FollowingPage() {
         /> : (
           <div className="grid gap-4 sm:grid-cols-2">
             {followed.map((t) => (
-              <article key={t.userId} className="rounded-xl border border-line bg-card p-4">
+              <article key={t.userId} className="rounded-xl border border-line bg-card p-4 card-hover">
                 <div className="flex items-center gap-3">
                   <Link href={`/student/teachers/${t.userId}`} aria-label={`${t.name || "Teacher"}'s profile`} className="shrink-0">
                     <span aria-hidden className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-soft text-xs font-bold">

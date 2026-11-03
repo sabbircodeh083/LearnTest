@@ -1,6 +1,7 @@
 import { createHash, createHmac } from "crypto";
 import fs from "fs";
 import path from "path";
+import { Readable } from "stream";
 import { env } from "../config/env.js";
 
 /**
@@ -49,6 +50,21 @@ export const storage = {
   async get(key: string): Promise<Buffer> {
     if (useS3()) { const res = await s3("GET", key); return Buffer.from(await res.arrayBuffer()); }
     return fs.promises.readFile(localPath(key));
+  },
+  /**
+   * Stream an object (optionally a byte range) without buffering it in memory.
+   * Used by the video player: 206 partial responses let the browser seek and
+   * buffer progressively instead of downloading the whole file first.
+   */
+  async createReadStream(key: string, opts: { start?: number; end?: number } = {}): Promise<Readable> {
+    const hasRange = Number.isSafeInteger(opts.start) && Number.isSafeInteger(opts.end);
+    if (useS3()) {
+      const extra: Record<string, string> = hasRange ? { Range: `bytes=${opts.start}-${opts.end}` } : {};
+      const res = await s3("GET", key, undefined, "application/octet-stream", extra);
+      if (!res.body) throw new Error("Object storage returned an empty body");
+      return Readable.fromWeb(res.body as any);
+    }
+    return fs.createReadStream(localPath(key), hasRange ? { start: opts.start, end: opts.end } : {});
   },
   async delete(key: string) {
     if (useS3()) { await s3("DELETE", key).catch(() => undefined); return; }

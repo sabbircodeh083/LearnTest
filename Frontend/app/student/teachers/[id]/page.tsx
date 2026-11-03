@@ -10,7 +10,7 @@ import { apiDelete, apiGet, apiPost, ApiError, qs } from "@/lib/api";
 import { useFetch } from "@/lib/hooks";
 import type { Exam, Page, Playlist, TeacherProfile, Video } from "@/lib/types";
 
-const cardCls = "rounded-2xl border border-line bg-card p-5 sm:p-6";
+const cardCls = "rounded-2xl border border-line bg-card p-5 sm:p-6 card-hover";
 
 function TeacherProfileInner({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);

@@ -8,6 +8,7 @@ import { Engagement, PlaylistRating } from "@/components/purchase";
 import { PriceTag } from "@/components/cards";
 import { SaveButton } from "@/lib/saved";
 import { TestsExamsTable } from "@/components/LinkedTests";
+import { VideoPlayer } from "@/components/VideoPlayer";
 import { apiGet, apiPost, ApiError, qs } from "@/lib/api";
 import { useFetch } from "@/lib/hooks";
 import { AvatarImg } from "@/components/profile";
@@ -142,20 +143,7 @@ function PlaylistDetailInner({ params }: { params: Promise<{ id: string }> }) {
           <div className="mt-4 grid items-start gap-5 xl:grid-cols-3">
             <div className="min-w-0 xl:col-span-2">
               <div className="overflow-hidden rounded-2xl border border-line bg-black">
-                {current.sourceType === "youtube" && current.youtubeId ? (
-                  <iframe
-                    key={String(current._id)}
-                    title={current.title}
-                    className="aspect-video w-full"
-                    src={`https://www.youtube-nocookie.com/embed/${current.youtubeId}`}
-                    allow="accelerometer; encrypted-media; picture-in-picture"
-                    allowFullScreen
-                  />
-                ) : (
-                  <div className="flex aspect-video w-full items-center justify-center p-6 text-center text-sm text-white/80">
-                    This is an uploaded video. Playback needs an authorized file download from the teacher — ask them for access if the player is unavailable.
-                  </div>
-                )}
+                <VideoPlayer video={current} />
               </div>
 
               <div className="mt-3 flex items-center gap-2.5">
@@ -220,7 +208,7 @@ function PlaylistDetailInner({ params }: { params: Promise<{ id: string }> }) {
               <Engagement targetType="video" targetId={String(current._id)} />
             </div>
 
-            <aside className="rounded-2xl border border-line bg-card p-4" aria-label="Playlist videos">
+            <aside className="rounded-2xl border border-line bg-card p-4 card-hover" aria-label="Playlist videos">
               <p className="font-bold">{pl.title}</p>
               <p className="mt-0.5 text-[13px] text-muted">
                 {vids.length} videos · by {nameOf(pl.ownerId)}

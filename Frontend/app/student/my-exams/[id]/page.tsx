@@ -98,7 +98,7 @@ function WrittenQuestionCard({ index, title, prompt, badge, mark, answer }: {
 }) {
   const [open, setOpen] = useState(answer.readOnly);
   return (
-    <article className="rounded-xl border border-line bg-card p-5">
+    <article className="rounded-xl border border-line bg-card p-5 card-hover">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-bold">Q{index + 1}. {title}</span>
         <Badge tone={badge.tone}>{badge.label}</Badge>
@@ -409,7 +409,7 @@ function AttemptPageInner({ params }: { params: Promise<{ id: string }> }) {
         sub={isProblem ? "Practice session — solve the problems on the original judge. Nothing is submitted." : (remaining ?? undefined)}
         action={<Badge tone={statusTone(a.state)}>{a.state.replace("_", " ")}</Badge>} />
       {a.state === "graded" && fromResults && (
-        <section className="mt-6 rounded-xl border border-line bg-card p-5" aria-label="Result and feedback">
+        <section className="mt-6 rounded-xl border border-line bg-card p-5 card-hover" aria-label="Result and feedback">
           <h2 className="text-[15px] font-bold">Result & Feedback</h2>
           <p className="mt-2 font-display text-3xl font-bold">
             {a.score ?? "—"}
@@ -438,7 +438,7 @@ function AttemptPageInner({ params }: { params: Promise<{ id: string }> }) {
         </section>
       )}
       {isProblem ? (
-        <section className="mt-6 rounded-xl border border-line bg-card p-5" aria-label="Problems to solve">
+        <section className="mt-6 rounded-xl border border-line bg-card p-5 card-hover" aria-label="Problems to solve">
           <h2 className="text-[15px] font-bold">Problems to solve</h2>
           <p className="mt-1 text-sm text-muted">Open each problem on the original platform and test yourself there. Nothing is sent to your teacher and progress is not reviewed.</p>
           <div className="mt-3">
@@ -471,7 +471,7 @@ function AttemptPageInner({ params }: { params: Promise<{ id: string }> }) {
       )}
 
       {!!projectCriteria.length && (
-        <section className="mt-6 rounded-xl border border-line bg-card p-5" aria-label="Marking criteria">
+        <section className="mt-6 rounded-xl border border-line bg-card p-5 card-hover" aria-label="Marking criteria">
           <h2 className="text-[15px] font-bold">Marking Criteria</h2>
           <p className="mt-0.5 text-sm text-muted">How your teacher will mark this project.</p>
           <ul className="mt-3 space-y-2">
@@ -486,7 +486,7 @@ function AttemptPageInner({ params }: { params: Promise<{ id: string }> }) {
       )}
 
       {projectInstructions && (
-        <section className="mt-4 rounded-xl border border-line bg-card p-5" aria-label="Project instructions">
+        <section className="mt-4 rounded-xl border border-line bg-card p-5 card-hover" aria-label="Project instructions">
           <h2 className="text-[15px] font-bold">Project Instructions</h2>
           <ul className="mt-2 list-disc space-y-0.5 pl-5 text-sm text-muted">
             {projectInstructions.split("\n").map((l) => l.trim()).filter(Boolean).map((l, i) => (
@@ -496,7 +496,7 @@ function AttemptPageInner({ params }: { params: Promise<{ id: string }> }) {
         </section>
       )}
 
-      <section className="mt-4 rounded-xl border border-line bg-card p-5" aria-label="Submit Your Project">
+      <section className="mt-4 rounded-xl border border-line bg-card p-5 card-hover" aria-label="Submit Your Project">
         <h2 className="text-[15px] font-bold">Submit Your Project</h2>
         <p className="mt-0.5 text-sm text-muted">Upload your project files or provide links as allowed by the teacher. All fields below are required.</p>
         {projectError && <p role="alert" className="mt-2 rounded-lg bg-dangersoft px-3 py-2 text-[13px] font-medium text-danger">{projectError}</p>}
@@ -602,7 +602,7 @@ function AttemptPageInner({ params }: { params: Promise<{ id: string }> }) {
               );
             }
             return (
-              <article key={q._id} className="rounded-xl border border-line bg-card p-5">
+              <article key={q._id} className="rounded-xl border border-line bg-card p-5 card-hover">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-bold">Q{i + 1}. {q.title}</span>
                   <Badge tone={questionBadge(q).tone}>{q.multiple ? "MULTIPLE" : questionBadge(q).label}</Badge>
@@ -634,7 +634,7 @@ function AttemptPageInner({ params }: { params: Promise<{ id: string }> }) {
         </div>
       )}
       {isWritten && (
-        <section className="mt-4 rounded-xl border border-line bg-card p-5" aria-label="Answer PDF">
+        <section className="mt-4 rounded-xl border border-line bg-card p-5 card-hover" aria-label="Answer PDF">
           <h2 className="text-[15px] font-bold">Answer PDF {readOnly ? "" : <span className="font-normal text-muted">(optional)</span>}</h2>
           <p className="mt-0.5 text-sm text-muted">Upload your handwritten or typed answers as a single PDF file.</p>
           {typeof answers._pdfUploadId === "string" && answers._pdfUploadId ? (

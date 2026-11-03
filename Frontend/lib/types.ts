@@ -47,6 +47,9 @@ export interface Video extends ContentBase {
   sourceType: "youtube" | "upload";
   youtubeId: string;
   assetUploadId: string | null;
+  /** Uploaded videos only: false while the file is still being scanned. */
+  mediaReady?: boolean;
+  mediaStatus?: string | null;
 }
 
 export interface Playlist extends ContentBase { videoIds: string[] }

@@ -29,7 +29,7 @@ function StatIcon({ tone }: { tone: "green" | "blue" | "purple" | "orange" }) {
 function StatCard({ icon, label, value, href }: { icon: "green" | "blue" | "purple" | "orange"; label: string; value: string; href: string }) {
   return (
     <Link href={href} aria-label={`${label}: ${value}`}
-      className="flex items-start gap-4 rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] transition hover:shadow-[0_8px_24px_rgba(16,24,40,0.14)] dark:hover:shadow-[0_8px_24px_rgba(255,255,255,0.16)]">
+      className="flex items-start gap-4 rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] card-hover">
       <StatIcon tone={icon} />
       <span className="min-w-0 flex-1">
         <span className="block text-sm text-muted">{label}</span>
@@ -139,7 +139,7 @@ export default function TeacherDashboard() {
             </div>
 
             {/* Highest-Rated Tests */}
-            <section className="mt-5 rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] sm:p-6" aria-label="Highest-Rated Tests">
+            <section className="mt-5 rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] sm:p-6 card-hover" aria-label="Highest-Rated Tests">
               <h2 className="text-xl font-bold tracking-tight sm:text-2xl">Highest-Rated Tests</h2>
               <p className="mt-1 text-[15px] text-muted">Your best performing tests based on student ratings.</p>
 

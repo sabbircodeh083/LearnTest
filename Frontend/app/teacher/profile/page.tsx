@@ -12,7 +12,7 @@ import type { MyTestPage, Page, UploadDoc, Video } from "@/lib/types";
 
 type Tab = "overview" | "reviews";
 
-const cardCls = "rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)]";
+const cardCls = "rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] card-hover";
 const editBtnCls = "inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-3.5 py-2 text-[13px] font-semibold text-[#1d6ce0] hover:bg-[#eff6ff]";
 
 function initialsOf(name: string) {
@@ -31,10 +31,10 @@ function StatMini({ icon, value, label, href }: { icon: React.ReactNode; value: 
       </div>
     </>
   );
-  const cls = "flex items-center gap-4 rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)]";
+  const cls = "flex items-center gap-4 rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)] card-hover";
   if (href) {
     return (
-      <Link href={href} aria-label={label} className={`${cls} transition hover:border-brand hover:shadow`}>
+      <Link href={href} aria-label={label} className={`${cls} transition hover:border-brand`}>
         {body}
       </Link>
     );

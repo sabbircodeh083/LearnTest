@@ -155,7 +155,7 @@ export default function AllTestsPage() {
         </Link>
       </div>
 
-      <section className="mt-4 rounded-xl border border-line bg-card p-4 shadow-[0_1px_2px_rgba(16,24,40,0.05)] sm:p-5" aria-label="All Tests">
+      <section className="mt-4 rounded-xl border border-line bg-card p-4 shadow-[0_1px_2px_rgba(16,24,40,0.05)] sm:p-5 card-hover" aria-label="All Tests">
         {/* tabs */}
         <div className="flex flex-wrap gap-6 border-b border-line" role="tablist" aria-label="Test buckets">
           {tabs.map((t) => (

@@ -27,7 +27,7 @@ export default function QuestionDetail({ params }: { params: Promise<{ id: strin
     <div>
       <Link href="/student/questions" className="text-sm font-semibold text-brandstrong">← All questions</Link>
       <div className="mt-3"><PageHead title={q.title} sub={`Published ${fmtDate(q.createdAt)}`} /></div>
-      <article className="rounded-2xl border border-line bg-card p-6">
+      <article className="rounded-2xl border border-line bg-card p-6 card-hover">
         <div className="flex flex-wrap gap-2">
           <Badge tone={questionBadge(q).tone}>{questionBadge(q).label}</Badge>
           {q.tags.map((t) => <Badge key={t}>#{t}</Badge>)}

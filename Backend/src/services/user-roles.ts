@@ -1,4 +1,5 @@
 import type { Role } from "../models/index.js";
+import { ObjectId } from "mongodb";
 
 // Single source of truth for roles: the Better Auth `user` collection.
 // Profiles must never store or decide `role`; every consumer reads it here.
@@ -13,6 +14,8 @@ export function userCollection(authDb?: () => any) {
   return authDb?.()?.collection("user");
 }
 
+const HEX24 = /^[0-9a-fA-F]{24}$/;
+
 export async function findUserByUserId(
   authDb: (() => any) | undefined,
   userId: string,
@@ -22,6 +25,10 @@ export async function findUserByUserId(
   // Better Auth mongodb adapter keys documents by `id`; fall back to `_id`.
   const byId = await col.findOne({ id: userId }).catch(() => null);
   if (byId) return byId;
+  if (HEX24.test(userId)) {
+    const byObjectId = await col.findOne({ _id: new ObjectId(userId) }).catch(() => null);
+    if (byObjectId) return byObjectId;
+  }
   return col.findOne({ _id: userId as any }).catch(() => null);
 }
 

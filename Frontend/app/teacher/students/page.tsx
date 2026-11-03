@@ -113,7 +113,7 @@ export default function TeacherFollowersPage() {
         </div>
       </div>
 
-      <section className="mt-4 rounded-xl border border-line bg-card p-4 shadow-[0_1px_2px_rgba(16,24,40,0.05)] sm:p-5" aria-label="Followers">
+      <section className="mt-4 rounded-xl border border-line bg-card p-4 shadow-[0_1px_2px_rgba(16,24,40,0.05)] sm:p-5 card-hover" aria-label="Followers">
         {/* filters */}
         <div className="flex flex-wrap items-end gap-3">
           <div className="relative min-w-[240px] flex-1">

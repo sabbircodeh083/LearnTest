@@ -31,7 +31,10 @@ export function createApp(deps: AppDeps = {}) {
 
   // Rate limiting (brute-force / spam / gateway-abuse protection).
   const windowMs = env.RATE_LIMIT_WINDOW_MS;
-  const apiLimiter = rateLimit({ windowMs, limit: Math.max(env.RATE_LIMIT_MAX_REQUESTS, 1000), standardHeaders: "draft-7", legacyHeaders: false });
+  // Video playback issues many byte-range requests while buffering/seeking;
+  // counting them against the API quota would make long videos unplayable.
+  const isMediaStream = (req: { originalUrl: string }) => /\/videos\/[^/]+\/media$/.test(req.originalUrl.split("?")[0] ?? "");
+  const apiLimiter = rateLimit({ windowMs, limit: Math.max(env.RATE_LIMIT_MAX_REQUESTS, 1000), standardHeaders: "draft-7", legacyHeaders: false, skip: isMediaStream });
   const authLimiter = rateLimit({ windowMs, limit: 100, standardHeaders: "draft-7", legacyHeaders: false });
   app.use("/api/v1", apiLimiter);
 

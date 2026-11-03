@@ -7,6 +7,8 @@ import { requireRole, isOwnerOrAdmin } from "../auth/guards.js";
 import { Video, Playlist, Question, Purchase, Entitlement, Upload } from "../models/index.js";
 import { storage } from "../services/storage.js";
 import { canAccessPaid } from "../services/entitlement.js";
+import { parseRange } from "../common/range.js";
+import { isDownloadable } from "./uploads.routes.js";
 
 export function contentRouter(deps: { requireAuth: any; verified: any[]; optionalAuth?: any }) {
   const r = Router();
@@ -42,7 +44,62 @@ export function contentRouter(deps: { requireAuth: any; verified: any[]; optiona
   })];
 
   r.get("/videos", ...optionalList(Video));
-  r.get("/videos/:id", optionalAuth, validate(idParam, "params"), getOne(Video, "video")); // paid check needs user; public free still requires auth per guard stack below
+  // Playback readiness for uploaded videos: the player must be able to explain
+  // "still scanning" vs "not available" instead of showing a bare failure.
+  const videoMediaMeta = async (doc: any) => {
+    if (doc.sourceType !== "upload") return { mediaReady: true, mediaStatus: null };
+    if (!doc.assetUploadId) return { mediaReady: false, mediaStatus: "missing" };
+    const up: any = await Upload.findById(doc.assetUploadId).select("scanStatus").lean().catch(() => null);
+    return { mediaReady: Boolean(up && isDownloadable(up.scanStatus)), mediaStatus: up?.scanStatus ?? "missing" };
+  };
+  r.get("/videos/:id", optionalAuth, validate(idParam, "params"), asyncHandler(async (req, res) => {
+    const doc: any = await Video.findById(p(req).id);
+    if (!doc) throw notFound();
+    const owner = req.user && isOwnerOrAdmin(req.user, doc.ownerId);
+    if (!owner && (doc.status !== "published" || doc.visibility === "private")) throw notFound();
+    if (!owner && doc.price > 0 && (!req.user || !(await canAccessPaid(req.user, doc, "video", doc.id)))) throw forbidden("Purchase required");
+    ok(res, { ...doc.toObject(), ...(await videoMediaMeta(doc)) });
+  }));
+  // Authorized inline stream for uploaded videos. The file lives in PRIVATE
+  // storage, so it is proxied here (never a public URL) after the same
+  // visibility + entitlement checks as the detail route. Byte-range requests
+  // are honored so the browser can buffer and seek like any normal video.
+  r.get("/videos/:id/media", requireAuth, validate(idParam, "params"), asyncHandler(async (req, res, next) => {
+    const doc: any = await Video.findById(p(req).id).lean();
+    if (!doc || doc.sourceType !== "upload" || !doc.assetUploadId) throw notFound("Video file not found");
+    const owner = isOwnerOrAdmin(req.user!, doc.ownerId);
+    if (!owner && (doc.status !== "published" || doc.visibility === "private")) throw notFound();
+    if (!owner && !(await canAccessPaid(req.user!, doc, "video", String(doc._id)))) throw forbidden("Purchase required");
+    const up: any = await Upload.findById(doc.assetUploadId).lean();
+    if (!up) throw notFound("Video file not found");
+    if (!isDownloadable(up.scanStatus)) throw forbidden(`Video is not playable yet (scan status: ${up.scanStatus})`);
+    const size = Number(up.size) || 0;
+    const range = parseRange(req.headers.range, size);
+    if (range === "unsatisfiable") {
+      res.setHeader("Content-Range", `bytes */${size}`);
+      return res.status(416).end();
+    }
+    const start = range ? range.start : 0;
+    const end = range ? range.end : Math.max(size - 1, 0);
+    res.status(range ? 206 : 200);
+    res.setHeader("Content-Type", String(up.detectedMime || "video/mp4"));
+    res.setHeader("Accept-Ranges", "bytes");
+    res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(String(up.filename || "video.mp4"))}"`);
+    res.setHeader("Cache-Control", "private, no-store");
+    // Private storage is fine, but the browser <video> tag is cross-origin in
+    // this architecture (separate API origin), so allow that explicitly.
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    if (range) res.setHeader("Content-Range", `bytes ${start}-${end}/${size}`);
+    if (size > 0) res.setHeader("Content-Length", String(end - start + 1));
+    if (req.method === "HEAD") return res.end();
+    const stream = await storage.createReadStream(up.storageKey, size > 0 ? { start, end } : {});
+    res.on("close", () => stream.destroy());
+    stream.on("error", (err: Error) => {
+      if (res.headersSent) res.destroy();
+      else next(err);
+    });
+    stream.pipe(res);
+  }));
   // Locked preview for paid videos: safe metadata + price + entitlement, so an
   // unpaid student sees a pay gate (title/price/Buy button) instead of a bare
   // 403. Playback identifiers (youtubeId/assetUploadId) are never included.

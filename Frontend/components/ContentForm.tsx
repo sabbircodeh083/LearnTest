@@ -151,7 +151,7 @@ export function ContentForm({ kind, endpoint, initial, backHref }: {
   };
 
   return (
-    <form onSubmit={submit} noValidate className="max-w-2xl space-y-4 rounded-2xl border border-line bg-card p-6">
+    <form onSubmit={submit} noValidate className="max-w-2xl space-y-4 rounded-2xl border border-line bg-card p-6 card-hover">
       {error && <Notice tone="red">{error}</Notice>}
       <Field label="Title" error={errors.title}><input className={cls("title")} value={form.title} onChange={set("title")} placeholder={`Your ${kind} title`} aria-invalid={!!errors.title} /></Field>
       <Field label="Description" error={errors.description}><textarea rows={3} className={cls("description")} value={form.description} onChange={set("description")} aria-invalid={!!errors.description} /></Field>

@@ -5,6 +5,7 @@ import { Empty, ErrorBox, Loading } from "./ui";
 import { DataList, DataRow, RowChip, RowIcon } from "./DataList";
 import { PlaylistCard } from "./cards";
 import { apiGet, qs } from "@/lib/api";
+import { extractYouTubeVideoId } from "@/lib/url";
 import { useFetch } from "@/lib/hooks";
 import { AvatarImg } from "./profile";
 import { SaveButton, saveKey, useSaved } from "@/lib/saved";
@@ -57,6 +58,7 @@ export interface TestRow {
   deadline: string | null;
   ownerId: string;
   createdAt: string;
+  videoId: string;
 }
 
 export function useTeacherProfiles() {
@@ -199,7 +201,7 @@ export function DiscoverVideos({ videoHref, nameOf, avatarOf = () => null, teach
             <>
               <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
                 {shown.map((v) => (
-                <article key={String(v._id)} className="h-full overflow-hidden rounded-xl border border-line bg-card shadow-[0_1px_2px_rgba(16,24,40,0.05)]">
+                <article key={String(v._id)} className="h-full overflow-hidden rounded-xl border border-line bg-card shadow-[0_1px_2px_rgba(16,24,40,0.05)] card-hover">
                   <Link href={videoHref(v)} className="block" aria-label={v.title}>
                     {v.youtubeId
                       // eslint-disable-next-line @next/next/no-img-element
@@ -262,6 +264,7 @@ export function PracticeTests({ testHref, nameOf, avatarOf = () => null, teacher
         durationMinutes: e.kind === "project" ? null : (e.durationMinutes ?? null),
         deadline: e.kind === "project" ? (e.endsAt ?? null) : null,
         ownerId: e.ownerId, createdAt: e.createdAt,
+        videoId: e.videoId ?? "",
       })),
     ];
     list.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
@@ -287,7 +290,7 @@ export function PracticeTests({ testHref, nameOf, avatarOf = () => null, teacher
           <svg viewBox="0 0 24 24" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
           <label className="sr-only" htmlFor="discover-test-search">Search by YouTube URL, teacher name or topic</label>
           <input id="discover-test-search" value={search}
-            onChange={(e) => { setSearch(e.target.value); const v = e.target.value.trim(); setTimeout(() => setDebounced(v), 350); }}
+            onChange={(e) => { setSearch(e.target.value); const v = e.target.value.trim(); const yt = extractYouTubeVideoId(v); setTimeout(() => setDebounced(yt ?? v), 350); }}
             placeholder="Search by YouTube URL, teacher name or topic …" className="w-full rounded-lg border border-line bg-card py-2.5 pl-9 pr-3 text-sm outline-none placeholder:text-muted/70" />
         </div>
         <label className="flex items-center gap-2 text-sm">

@@ -6,6 +6,7 @@ import { Badge, ErrorBox, Loading, useToast, Btn } from "@/components/ui";
 import { useDialog } from "@/components/AlertDialog";
 import { BuyPanel, Engagement, LockedPayGate } from "@/components/purchase";
 import { TestsExamsTable } from "@/components/LinkedTests";
+import { VideoPlayer } from "@/components/VideoPlayer";
 import { SaveButton } from "@/lib/saved";
 import { apiGet, apiPost, ApiError, qs } from "@/lib/api";
 import { useFetch } from "@/lib/hooks";
@@ -54,14 +55,7 @@ function VideoDetailInner({ params }: { params: Promise<{ id: string }> }) {
       <h1 className="mt-3 font-display text-3xl font-bold">{v.title}</h1>
       <p className="mt-1 text-sm text-muted">Published {fmtDate(v.createdAt)}</p>
       <div className="mt-4 overflow-hidden rounded-2xl border border-line bg-black">
-        {v.sourceType === "youtube" && v.youtubeId ? (
-          <iframe title={v.title} className="aspect-video w-full" src={`https://www.youtube-nocookie.com/embed/${v.youtubeId}`}
-            allow="accelerometer; encrypted-media; picture-in-picture" allowFullScreen />
-        ) : (
-          <div className="flex aspect-video items-center justify-center p-6 text-center text-sm text-white/80">
-            This is an uploaded video. Playback needs an authorized file download from the teacher — ask them for access if the player is unavailable.
-          </div>
-        )}
+        <VideoPlayer video={v} />
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
         {v.tags.map((t) => <Badge key={t}>#{t}</Badge>)}
