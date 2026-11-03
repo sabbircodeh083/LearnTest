@@ -4,9 +4,10 @@ import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import { Empty, ErrorBox, Loading, useToast } from "@/components/ui";
 import { apiGet, apiPatch, apiUpload, ApiError, qs } from "@/lib/api";
+import { safeExternalUrl } from "@/lib/url";
 import { useAuth } from "@/lib/auth";
 import { AvatarImg, CoverBanner } from "@/components/profile";
-import { useFetch } from "@/lib/hooks";
+import { useFetch, usePublicConfig } from "@/lib/hooks";
 import type { MyTestPage, Page, UploadDoc, Video } from "@/lib/types";
 
 type Tab = "overview" | "reviews";
@@ -70,8 +71,12 @@ export default function TeacherProfilePage() {
   const username = user?.username ? `@${user.username}` : user?.email ? `@${user.email.split("@")[0]}` : "";
   const soon = (what: string) => toast(`${what} is coming soon.`);
   const goEdit = () => router.push("/teacher/profile/edit");
+  const { config: pubConfig } = usePublicConfig();
   const uploadAvatar = async (file: File | undefined) => {
     if (!file) return;
+    if (!/\.(png|jpe?g|webp)$/i.test(file.name)) { toast("Only PNG, JPG or WebP images are allowed.", "err"); return; }
+    const maxMB = pubConfig?.uploadLimits.image.sizeMB;
+    if (maxMB && file.size > maxMB * 1024 * 1024) { toast(`Image must be under ${maxMB}MB.`, "err"); return; }
     setUploading(true);
     try {
       const doc = await apiUpload<UploadDoc>("/api/v1/uploads/avatar", file);
@@ -222,11 +227,11 @@ export default function TeacherProfilePage() {
                         { key: "linkedin", label: "LinkedIn", badge: "bg-[#0a66c2] text-white", mark: "in", href: user?.socials?.linkedin ?? "" },
                         { key: "dev", label: "DEV", badge: "bg-black text-white", mark: "DEV", href: user?.socials?.dev ?? "" },
                         { key: "website", label: "Website", badge: "bg-[#1d6ce0] text-white", mark: "✦", href: user?.socials?.website ?? "" },
-                      ].filter((l) => l.href.trim());
+                      ].filter((l) => safeExternalUrl(l.href));
                       return links.length ? (
                         <p className="mt-3 flex flex-wrap gap-2">
                           {links.map((l) => (
-                            <a key={l.key} href={l.href} target="_blank" rel="noreferrer" title={l.label} aria-label={l.label}
+                            <a key={l.key} href={safeExternalUrl(l.href) ?? "#"} target="_blank" rel="noreferrer" title={l.label} aria-label={l.label}
                               className={`flex h-9 w-11 items-center justify-center rounded-lg text-[11px] font-black ${l.badge}`}>{l.mark}</a>
                           ))}
                         </p>

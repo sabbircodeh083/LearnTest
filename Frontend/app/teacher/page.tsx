@@ -77,7 +77,7 @@ function TypeIcon({ testKind }: { testKind?: string }) {
 export default function TeacherDashboard() {
   const { user } = useAuth();
   const videos = useFetch(() => apiGet<Page<Video>>(`/api/v1/videos${qs({ mine: 1, limit: 1 })}`), []);
-  // All tests (exams of every kind + legacy assignment projects), newest first.
+  // All tests (exams of every kind), newest first.
   const tests = useFetch(() => apiGet<MyTestPage>(`/api/v1/my-tests${qs({ limit: 1 })}`), []);
   const exams = useFetch(() => apiGet<Page<Exam>>(`/api/v1/exams${qs({ mine: 1, limit: 30 })}`), []);
   const followers = useFetch(() => apiGet<{ total: number }>(`/api/v1/follows/followers${qs({ limit: 1 })}`), []);
@@ -135,7 +135,7 @@ export default function TeacherDashboard() {
               <StatCard icon="green" label="Total Followers" value={(followers.data?.total ?? 0).toLocaleString()} href="/teacher/students" />
               <StatCard icon="blue" label="Total Videos" value={(videos.data?.total ?? 0).toLocaleString()} href="/teacher/videos" />
               <StatCard icon="purple" label="Total Tests" value={(tests.data?.total ?? 0).toLocaleString()} href="/teacher/exams" />
-              <StatCard icon="orange" label="Total Earnings" value={`৳ ${(sales.data?.amount ?? 0).toLocaleString()}`} href="/teacher/earnings" />
+              <StatCard icon="orange" label="Total Earnings" value={`$ ${(sales.data?.amount ?? 0).toLocaleString()}`} href="/teacher/earnings" />
             </div>
 
             {/* Highest-Rated Tests */}

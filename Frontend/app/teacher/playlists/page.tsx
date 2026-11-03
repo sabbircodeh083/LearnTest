@@ -2,6 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Badge, Btn, Empty, ErrorBox, Loading, statusTone, useToast } from "@/components/ui";
+import { useDialog } from "@/components/AlertDialog";
 import { PriceTag } from "@/components/cards";
 import { apiDelete, apiGet, apiPatch, ApiError, qs } from "@/lib/api";
 import { useFetch } from "@/lib/hooks";
@@ -9,6 +10,7 @@ import type { Page, Playlist, Video } from "@/lib/types";
 
 export default function TeacherPlaylistsPage() {
   const toast = useToast();
+  const { confirm } = useDialog();
   const [search, setSearch] = useState("");
   const [submitted, setSubmitted] = useState("");
   const [menuId, setMenuId] = useState<string | null>(null);
@@ -30,11 +32,11 @@ export default function TeacherPlaylistsPage() {
     setMenuId(null);
     try {
       if (action === "hide") {
-        if (!window.confirm("Hide this playlist? It will no longer be published.")) return;
+        if (!(await confirm({ title: "Hide this playlist?", message: "It will no longer be published.", confirmLabel: "Hide", danger: true }))) return;
         await apiDelete(`/api/v1/playlists/${p._id}`);
         toast("Playlist hidden.");
       } else if (action === "delete") {
-        if (!window.confirm(`Permanently delete "${p.title}"? This cannot be undone.`)) return;
+        if (!(await confirm({ title: `Permanently delete "${p.title}"?`, message: "This cannot be undone.", confirmLabel: "Delete permanently", danger: true }))) return;
         await apiDelete(`/api/v1/playlists/${p._id}?hard=true`);
         toast("Playlist permanently deleted.");
       } else {

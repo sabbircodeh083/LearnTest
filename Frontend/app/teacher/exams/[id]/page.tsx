@@ -6,6 +6,7 @@ import { AvatarImg } from "@/components/profile";
 import { Empty, ErrorBox, Loading } from "@/components/ui";
 import { apiGet, qs } from "@/lib/api";
 import { useFetch } from "@/lib/hooks";
+import { DataList, DataRow, RowIcon } from "@/components/DataList";
 import { fmtDate, idOf, type Exam, type ExamAttemptRow, type Page, type Question } from "@/lib/types";
 
 type Tab = "overview" | "questions" | "submissions";
@@ -58,69 +59,48 @@ function pctOf(score: number | null, outOf: number): number | null {
   return Math.round((score / outOf) * 100);
 }
 
-/* ---------- shared table ---------- */
-function AttemptTable({ rows, outOf, start, examId }: { rows: ExamAttemptRow[]; outOf: number; start: number; examId?: string }) {
+/* ---------- shared responsive list ---------- */
+function AttemptTable({ rows, outOf, examId }: { rows: ExamAttemptRow[]; outOf: number; examId?: string }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[860px] text-left text-sm">
-        <thead>
-          <tr className="text-[13px] text-muted">
-            <th className="rounded-l-lg bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">#</th>
-            <th className="bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Student</th>
-            <th className="bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Score</th>
-            <th className="bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Time Taken</th>
-            <th className="bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Submitted At</th>
-            <th className="bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Status</th>
-            <th className="rounded-r-lg bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Actions</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-line">
-          {rows.map((a, i) => {
-            const st = statusOf(a.state);
-            return (
-              <tr key={String((a as { _id?: string })._id ?? i)} className="align-middle">
-                <td className="px-4 py-4 text-muted">{start + i + 1}</td>
-                <td className="px-4 py-4">
-                  <div className="flex items-center gap-3">
-                    <span aria-hidden className={`flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full text-[13px] font-bold ${toneOf(a.student.userId)}`}>
-                      {a.student.avatarUploadId ? (
-                        <AvatarImg uploadId={a.student.avatarUploadId} name={a.student.name} className="h-full w-full" />
-                      ) : (
-                        initialsOf(a.student.name)
-                      )}
-                    </span>
-                    <span>
-                      <span className="block font-semibold leading-tight">{a.student.name}</span>
-                      <span className="block text-[13px] text-muted">{a.student.email || `id ${a.student.userId.slice(0, 8)}…`}</span>
-                    </span>
-                  </div>
-                </td>
-                <td className="whitespace-nowrap px-4 py-4"><Score score={a.state === "graded" ? a.score : null} outOf={outOf} /></td>
-                <td className="whitespace-nowrap px-4 py-4 text-muted">{a.state === "in_progress" ? "-" : fmtDuration(a.startedAt, a.submittedAt ?? a.createdAt)}</td>
-                <td className="whitespace-nowrap px-4 py-4 text-muted">{fmtDateTime(a.submittedAt ?? a.createdAt)}</td>
-                <td className="px-4 py-4"><span className={`inline-flex items-center rounded-md px-3 py-1 text-[13px] font-semibold ${st.cls}`}>{st.label}</span></td>
-                <td className="px-4 py-4">
-                  <div className="flex items-center gap-1">
-                    {examId ? (
-                      <Link href={`/teacher/feedback/${examId}?source=exam&attempt=${String((a as { _id?: string })._id ?? "")}&from=test`}
-                        className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-line bg-card px-3.5 py-2 text-[13px] font-semibold text-[#1d6ce0] hover:bg-[#eff6ff]">
-                        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></svg>
-                        Give Feedback
-                      </Link>
-                    ) : (
-                      <button title="Submission review opens here soon" className="whitespace-nowrap rounded-lg border border-line bg-card px-4 py-2 text-[13px] font-medium hover:bg-soft">
-                        View Submission
-                      </button>
-                    )}
-                    <button title="More actions soon" aria-label="More actions" className="rounded-lg p-2 text-muted hover:bg-soft">⋮</button>
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+    <DataList label="Attempts">
+      {rows.map((a, i) => {
+        const st = statusOf(a.state);
+        return (
+          <DataRow
+            key={String((a as { _id?: string })._id ?? i)}
+            icon={
+              <RowIcon tone={toneOf(a.student.userId)} shape="rounded-full" size="h-9 w-9">
+                {a.student.avatarUploadId ? (
+                  <AvatarImg uploadId={a.student.avatarUploadId} name={a.student.name} className="h-full w-full" />
+                ) : (
+                  <span className="text-[13px] font-bold">{initialsOf(a.student.name)}</span>
+                )}
+              </RowIcon>
+            }
+            title={a.student.name}
+            meta={<>{a.student.email || `id ${a.student.userId.slice(0, 8)}…`} · {fmtDateTime(a.submittedAt ?? a.createdAt)}</>}
+            detail={<><Score score={a.state === "graded" ? a.score : null} outOf={outOf} /> · Time taken {a.state === "in_progress" ? "-" : fmtDuration(a.startedAt, a.submittedAt ?? a.createdAt)}</>}
+            chip={<span className={`inline-flex items-center rounded-md px-3 py-1 text-[13px] font-semibold ${st.cls}`}>{st.label}</span>}
+            actions={
+              <>
+                {examId ? (
+                  <Link href={`/teacher/feedback/${examId}?source=exam&attempt=${String((a as { _id?: string })._id ?? "")}&from=test`}
+                    className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-line bg-card px-3.5 py-2 text-[13px] font-semibold text-[#1d6ce0] hover:bg-[#eff6ff]">
+                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></svg>
+                    Give Feedback
+                  </Link>
+                ) : (
+                  <button title="Submission review opens here soon" className="whitespace-nowrap rounded-lg border border-line bg-card px-4 py-2 text-[13px] font-medium hover:bg-soft">
+                    View Submission
+                  </button>
+                )}
+                <button title="More actions soon" aria-label="More actions" className="rounded-lg p-2 text-muted hover:bg-soft">⋮</button>
+              </>
+            }
+          />
+        );
+      })}
+    </DataList>
   );
 }
 
@@ -196,7 +176,7 @@ function SubmissionsTab({ examId, outOf }: { examId: string; outOf: number }) {
           : !data.data?.items.length ? <Empty title="No submissions found" body={debounced || dateKey !== "all" ? "Nothing matches this search or date filter. Clear them to see everything." : "No student has attempted this test yet."} />
           : (
             <>
-              <AttemptTable rows={data.data.items} outOf={outOf} start={(page - 1) * 10} examId={examId} />
+              <AttemptTable rows={data.data.items} outOf={outOf} examId={examId} />
               <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm text-muted">
                 <p>{total} submission{total === 1 ? "" : "s"} · page {page} of {pages}</p>
                 <div className="flex gap-2">
@@ -387,7 +367,7 @@ function OverviewTab({ rows, outOf, examId, kind }: { rows: ExamAttemptRow[]; ou
         <p className="mt-0.5 text-sm text-muted">Latest student submissions for this test.</p>
         <div className="mt-3">
           {!recent.length ? <Empty title="No submissions yet" body="Submissions appear here once students submit this test." />
-            : <AttemptTable rows={recent} outOf={outOf} start={0} examId={examId} />}
+            : <AttemptTable rows={recent} outOf={outOf} examId={examId} />}
         </div>
       </section>
       )}

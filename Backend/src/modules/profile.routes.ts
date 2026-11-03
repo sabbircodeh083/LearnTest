@@ -2,6 +2,8 @@ import { Router } from "express";
 import { z } from "zod";
 import { asyncHandler, ok, validate } from "../common/middleware.js";
 import { Profile } from "../models/index.js";
+import { httpUrl } from "../common/schemas.js";
+const socialUrl = httpUrl.or(z.literal(""));
 import { audit } from "../services/audit.js";
 
 export function profileRouter(deps: { requireAuth: any; authDb?: () => any }) {
@@ -9,6 +11,10 @@ export function profileRouter(deps: { requireAuth: any; authDb?: () => any }) {
   const { requireAuth } = deps;
   // Role always comes from the Better Auth `user` collection (req.user);
   // profiles never store it — a legacy `profile.role` is ignored.
+  const maskAccount = (v: unknown) => {
+    const s = typeof v === "string" ? v : "";
+    return s ? `••••${s.slice(-4)}` : "";
+  };
   const safe = (user: any, profile: any) => ({
     id: user.id,
     email: user.email,
@@ -38,7 +44,7 @@ export function profileRouter(deps: { requireAuth: any; authDb?: () => any }) {
       accountType: profile?.payout?.accountType ?? "",
       holderName: profile?.payout?.holderName ?? "",
       bankName: profile?.payout?.bankName ?? "",
-      accountNumber: profile?.payout?.accountNumber ?? "",
+      accountNumber: maskAccount(profile?.payout?.accountNumber),
       branchName: profile?.payout?.branchName ?? "",
       routingNumber: profile?.payout?.routingNumber ?? "",
       provider: profile?.payout?.provider ?? "",
@@ -71,11 +77,11 @@ export function profileRouter(deps: { requireAuth: any; authDb?: () => any }) {
           skills: z.array(z.string().min(1).max(40)).max(20).optional(),
           socials: z
             .object({
-              github: z.string().max(2048).optional(),
-              youtube: z.string().max(2048).optional(),
-              linkedin: z.string().max(2048).optional(),
-              dev: z.string().max(2048).optional(),
-              website: z.string().max(2048).optional(),
+              github: socialUrl.optional(),
+              youtube: socialUrl.optional(),
+              linkedin: socialUrl.optional(),
+              dev: socialUrl.optional(),
+              website: socialUrl.optional(),
             })
             .partial()
             .optional(),
@@ -97,6 +103,10 @@ export function profileRouter(deps: { requireAuth: any; authDb?: () => any }) {
     ),
     asyncHandler(async (req, res) => {
       // Role is deliberately NOT patchable here — role changes are admin/bootstrap workflows only.
+      // A masked account number echoed back by a client is display-only.
+      if (typeof req.body?.payout?.accountNumber === "string" && req.body.payout.accountNumber.includes("•")) {
+        delete req.body.payout.accountNumber;
+      }
       const profile = await Profile.findOneAndUpdate(
         { userId: req.user!.id },
         { $set: req.body },

@@ -2,10 +2,9 @@
 import { use } from "react";
 import { ContentForm, type ContentInitial } from "@/components/ContentForm";
 import { ErrorBox, Loading, PageHead } from "@/components/ui";
-import { apiGet, ApiError } from "@/lib/api";
+import { apiGet } from "@/lib/api";
 import { useFetch } from "@/lib/hooks";
 import { QuizForm, type QuizFormInitial } from "../../new/quiz/form";
-import { AssignmentProjectForm, type AssignmentProjectFormInitial } from "./assignment-form";
 import { WrittenForm, type WrittenFormInitial } from "../../new/written/form";
 import { ProblemForm, type ProblemFormInitial } from "../../new/problem/form";
 import { ProjectForm, type ProjectFormInitial } from "../../new/project/form";
@@ -49,9 +48,7 @@ interface QDoc {
   explanation?: string;
 }
 
-type Loaded =
-  | { source: "assignment"; assignment: Record<string, unknown> }
-  | { source: "exam"; kind: string; exam: ExamDoc; questions: QDoc[] };
+interface Loaded { kind: string; exam: ExamDoc; questions: QDoc[] }
 
 function toLocalInput(iso?: string | null) {
   if (!iso) return "";
@@ -157,17 +154,7 @@ function parseProblemQ(q: QDoc) {
 export default function EditTestPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data, error, loading, retry } = useFetch(async (): Promise<Loaded> => {
-    let exam: ExamDoc;
-    try {
-      exam = await apiGet<ExamDoc>(`/api/v1/exams/${id}`);
-    } catch (e) {
-      // Legacy project tests live in Assignments — same generic edit form, other endpoint.
-      if (e instanceof ApiError && e.status === 404) {
-        const assignment = await apiGet<Record<string, unknown>>(`/api/v1/assignments/${id}`);
-        return { source: "assignment", assignment } as const;
-      }
-      throw e;
-    }
+    const exam = await apiGet<ExamDoc>(`/api/v1/exams/${id}`);
     const qids = (exam.questionIds ?? []).map(String);
     const questions: QDoc[] = [];
     for (const qid of qids.slice(0, 200)) {
@@ -178,59 +165,11 @@ export default function EditTestPage({ params }: { params: Promise<{ id: string 
         // unknown IDs, so keeping them would block every update).
       }
     }
-    return { source: "exam", kind: exam.kind ?? "quiz", exam, questions } as const;
+    return { kind: exam.kind ?? "quiz", exam, questions };
   }, [id]);
 
   if (loading) return <div><PageHead title="Edit test" sub="Loading…" /><Loading label="Loading test…" /></div>;
   if (error || !data) return <div><PageHead title="Edit test" sub="" /><ErrorBox message={error ?? "Test not found."} onRetry={retry} /></div>;
-
-  if (data.source === "assignment") {
-    const a = data.assignment as {
-      _id?: unknown; title?: unknown; description?: unknown; tags?: unknown;
-      visibility?: unknown; status?: unknown; price?: unknown; videoId?: unknown;
-      dueAt?: unknown; maxScore?: unknown; maxAttempts?: unknown; passingMarks?: unknown;
-      playlistId?: unknown; maxFileSize?: unknown; maxFiles?: unknown;
-      submissionTypes?: unknown; rubric?: unknown;
-    };
-    const dueRaw = typeof a.dueAt === "string" ? a.dueAt : "";
-    const rawSubTypes = Array.isArray(a.submissionTypes) ? a.submissionTypes.map(String) : [];
-    const validSubs = ["zip", "git", "live", "pdf"] as const;
-    const rawCriteria = Array.isArray(a.rubric) ? a.rubric : [];
-    const storedCriteria = rawCriteria
-      .map((c: unknown) => {
-        const r = c as { label?: unknown; marks?: unknown };
-        return { label: String(r?.label ?? ""), marks: String(r?.marks ?? "") };
-      })
-      .filter((c) => c.label || c.marks);
-    const packed = parsePackedProject(String(a.description ?? ""));
-    const recoveredCriteria = storedCriteria.length ? storedCriteria : packed.criteria;
-    const maxScoreRaw = String(a.maxScore ?? 100);
-    const criteria = recoveredCriteria.length ? recoveredCriteria : defaultCriteria(maxScoreRaw);
-    const storedSubs = rawSubTypes.filter((s): s is (typeof validSubs)[number] =>
-      (validSubs as readonly string[]).includes(s));
-    const storedPassing = a.passingMarks != null ? String(a.passingMarks) : "";
-    const initial: AssignmentProjectFormInitial = {
-      assignmentId: String(a._id ?? id),
-      title: String(a.title ?? ""),
-      description: String(a.description ?? ""),
-      tags: Array.isArray(a.tags) ? a.tags.map(String) : [],
-      pricing: Number(a.price ?? 0) > 0 ? "paid" : "free",
-      price: String(a.price ?? ""),
-      visibility: String(a.visibility ?? "public"),
-      status: String(a.status ?? "draft"),
-      videoId: String(a.videoId ?? ""),
-      dueAt: toLocalInput(dueRaw),
-      maxScore: maxScoreRaw,
-      maxAttempts: a.maxAttempts == null ? "unlimited" : String(a.maxAttempts),
-      passingMarks: storedPassing && storedPassing !== "0" ? storedPassing : (packed.passingMarks || String(Math.round((Number(maxScoreRaw) || 100) * 0.6))),
-      playlistId: String(a.playlistId ?? ""),
-      maxFileSize: String(a.maxFileSize || packed.maxFileSize || "50 MB"),
-      maxFiles: String(a.maxFiles ?? (packed.maxFiles || 1)),
-      subTypes: storedSubs.length ? storedSubs : (packed.subTypes.length ? packed.subTypes : ["zip", "git", "live", "pdf"]),
-      criteria,
-    };
-    return <AssignmentProjectForm initial={initial} />;
-  }
 
   const exam = data.exam;
   const qs = data.questions;

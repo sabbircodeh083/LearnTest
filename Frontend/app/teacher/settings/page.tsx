@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Empty, Loading, useToast } from "@/components/ui";
+import { Empty, FieldError, Loading, useToast } from "@/components/ui";
 import { apiPatch, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
@@ -37,6 +37,8 @@ export default function TeacherSettingsPage() {
   const [mobileNumber, setMobileNumber] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const clearErr = (k: string) => setFieldErrors((p) => (p[k] ? { ...p, [k]: "" } : p));
 
   if (!loading && user && accountType === null) {
     setAccountType((p?.accountType as AccountType) || "bank");
@@ -52,29 +54,34 @@ export default function TeacherSettingsPage() {
   const type = accountType ?? "bank";
   const save = async () => {
     setError("");
-    if (!(holderName ?? "").trim()) { setError("Account holder name is required."); return; }
+    const errs: Record<string, string> = {};
+    if (!(holderName ?? "").trim()) errs.holderName = "Account holder name is required.";
     const payout: Record<string, string> = { accountType: type, holderName: (holderName ?? "").trim() };
     if (type === "bank") {
-      if (!bankName) { setError("Choose your bank."); return; }
-      if (!/^[0-9]{5,24}$/.test((accountNumber ?? "").trim())) { setError("Account number must be 5–24 digits."); return; }
-      if (!(branchName ?? "").trim()) { setError("Branch name is required."); return; }
-      if (routingNumber?.trim() && !/^[0-9]{3,12}$/.test(routingNumber.trim())) { setError("Routing number must be digits only."); return; }
-      payout.bankName = bankName;
+      if (!bankName) errs.bankName = "Bank name is required — choose your bank.";
+      if (!(accountNumber ?? "").trim()) errs.accountNumber = "Account number is required.";
+      else if (!/^[0-9]{5,24}$/.test((accountNumber ?? "").trim())) errs.accountNumber = "Account number must be 5–24 digits (digits only).";
+      if (!(branchName ?? "").trim()) errs.branchName = "Branch name is required.";
+      if (routingNumber?.trim() && !/^[0-9]{3,12}$/.test(routingNumber.trim())) errs.routingNumber = "Routing number must be 3–12 digits (digits only).";
+      payout.bankName = bankName ?? "";
       payout.accountNumber = (accountNumber ?? "").trim();
       payout.branchName = (branchName ?? "").trim();
       payout.routingNumber = (routingNumber ?? "").trim();
       payout.provider = "";
       payout.mobileNumber = "";
     } else {
-      if (!provider) { setError("Choose a mobile banking provider."); return; }
-      if (!/^\+?[0-9]{6,15}$/.test((mobileNumber ?? "").trim())) { setError("Enter a valid mobile number."); return; }
-      payout.provider = provider;
+      if (!provider) errs.provider = "Provider is required — choose a mobile banking provider.";
+      if (!(mobileNumber ?? "").trim()) errs.mobileNumber = "Mobile number is required.";
+      else if (!/^\+?[0-9]{6,15}$/.test((mobileNumber ?? "").trim())) errs.mobileNumber = "Enter a valid mobile number (6–15 digits, e.g. 01XXXXXXXXX).";
+      payout.provider = provider ?? "";
       payout.mobileNumber = (mobileNumber ?? "").trim();
       payout.bankName = "";
       payout.accountNumber = "";
       payout.branchName = "";
       payout.routingNumber = "";
     }
+    setFieldErrors(errs);
+    if (Object.keys(errs).length) { setError("Please fix the highlighted fields below."); return; }
     setSaving(true);
     try {
       await apiPatch("/api/v1/me", { payout });
@@ -155,50 +162,57 @@ export default function TeacherSettingsPage() {
 
                     <div className="mt-4">
                       <Label>Account Holder Name</Label>
-                      <input value={holderName ?? ""} onChange={(e) => setHolderName(e.target.value)} maxLength={120}
+                      <input value={holderName ?? ""} onChange={(e) => { setHolderName(e.target.value); clearErr("holderName"); }} maxLength={120}
                         placeholder="Md Sabbir Sikder" className={inputCls} />
+                        <FieldError>{fieldErrors.holderName}</FieldError>
                     </div>
 
                     {type === "bank" ? (
                       <>
                         <div className="mt-4">
                           <Label>Bank Name</Label>
-                          <select value={bankName ?? ""} onChange={(e) => setBankName(e.target.value)} className={inputCls}>
+                          <select value={bankName ?? ""} onChange={(e) => { setBankName(e.target.value); clearErr("bankName"); }} className={inputCls}>
                             <option value="">Select your bank…</option>
                             {BANKS.map((b) => <option key={b} value={b}>{b}</option>)}
                           </select>
+                          <FieldError>{fieldErrors.bankName}</FieldError>
                         </div>
                         <div className="mt-4 grid gap-4 sm:grid-cols-2">
                           <div>
                             <Label>Account Number</Label>
-                            <input value={accountNumber ?? ""} onChange={(e) => setAccountNumber(e.target.value)} inputMode="numeric" maxLength={32}
+                            <input value={accountNumber ?? ""} onChange={(e) => { setAccountNumber(e.target.value); clearErr("accountNumber"); }} inputMode="numeric" maxLength={32}
                               placeholder="20501234567890" className={inputCls} />
+                              <FieldError>{fieldErrors.accountNumber}</FieldError>
                           </div>
                           <div>
                             <Label>Branch Name</Label>
-                            <input value={branchName ?? ""} onChange={(e) => setBranchName(e.target.value)} maxLength={160}
+                            <input value={branchName ?? ""} onChange={(e) => { setBranchName(e.target.value); clearErr("branchName"); }} maxLength={160}
                               placeholder="Dhanmondi Branch" className={inputCls} />
+                              <FieldError>{fieldErrors.branchName}</FieldError>
                           </div>
                         </div>
                         <div className="mt-4">
                           <Label>Routing Number (Optional)</Label>
-                          <input value={routingNumber ?? ""} onChange={(e) => setRoutingNumber(e.target.value)} inputMode="numeric" maxLength={32}
+                          <input value={routingNumber ?? ""} onChange={(e) => { setRoutingNumber(e.target.value); clearErr("routingNumber"); }} inputMode="numeric" maxLength={32}
                             placeholder="e.g. 125263436" className={inputCls} />
+                          <FieldError>{fieldErrors.routingNumber}</FieldError>
                         </div>
                       </>
                     ) : (
                       <div className="mt-4 grid gap-4 sm:grid-cols-2">
                         <div>
                           <Label>Provider</Label>
-                          <select value={provider ?? ""} onChange={(e) => setProvider(e.target.value)} className={inputCls}>
+                          <select value={provider ?? ""} onChange={(e) => { setProvider(e.target.value); clearErr("provider"); }} className={inputCls}>
                             <option value="">Select provider…</option>
                             {PROVIDERS.map((b) => <option key={b} value={b}>{b}</option>)}
                           </select>
+                          <FieldError>{fieldErrors.provider}</FieldError>
                         </div>
                         <div>
                           <Label>Mobile Number</Label>
-                          <input value={mobileNumber ?? ""} onChange={(e) => setMobileNumber(e.target.value)} inputMode="tel" maxLength={20}
+                          <input value={mobileNumber ?? ""} onChange={(e) => { setMobileNumber(e.target.value); clearErr("mobileNumber"); }} inputMode="tel" maxLength={20}
                             placeholder="01XXXXXXXXX" className={inputCls} />
+                              <FieldError>{fieldErrors.mobileNumber}</FieldError>
                         </div>
                       </div>
                     )}

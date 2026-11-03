@@ -1,19 +1,22 @@
 import { Router } from "express";
 import { z } from "zod";
 import { asyncHandler, ok, p, q, validate } from "../common/middleware.js";
-import { contentBody, httpUrl, idParam, pagination, paginate, stripPrivateQuestion } from "../common/schemas.js";
+import { contentBody, idParam, pagination, paginate, stripPrivateQuestion } from "../common/schemas.js";
 import { conflict, forbidden, notFound, badRequest } from "../common/errors.js";
 import { isOwnerOrAdmin, requireRole } from "../auth/guards.js";
-import { Assignment, Exam, ExamAttempt, Profile, Question, Submission } from "../models/index.js";
+import { Exam, ExamAttempt, Profile, Question } from "../models/index.js";
 import { canAccessPaid } from "../services/entitlement.js";
 import { gradeMcqExam, isAutoGradable } from "../services/auto-grade.js";
 import { deleteSuperseded } from "../services/submission-cleanup.js";
 
-// Total marks = sum of question marks. Rejects dead question IDs and passing > total.
-async function checkExamQuestions(questionIds: string[], passingMarks: number) {
-  const docs = await Question.find({ _id: { $in: questionIds } }).select("marks").lean();
+// Total marks = sum of question marks. Rejects dead question IDs, questions
+// the caller does not own (answer theft across teachers), and passing > total.
+async function checkExamQuestions(questionIds: string[], passingMarks: number, ownerId: string, isAdmin: boolean) {
+  const docs = await Question.find({ _id: { $in: questionIds } }).select("marks ownerId").lean();
   if (docs.length !== questionIds.length)
     throw badRequest(`${questionIds.length - docs.length} question(s) not found — check the IDs.`);
+  if (!isAdmin && docs.some((d: any) => String(d.ownerId) !== ownerId))
+    throw forbidden("You can only build exams from your own questions.");
   const total = docs.reduce((s: number, d: any) => s + (typeof d.marks === "number" ? d.marks : 1), 0);
   if (passingMarks > total) throw badRequest(`Passing marks (${passingMarks}) exceed total marks (${total}).`);
   return total;
@@ -23,10 +26,8 @@ export function learningRouter(deps: { requireAuth: any; verified: any[]; option
   const r = Router(); const { requireAuth, verified, optionalAuth } = deps;
   const teacherOrAdmin = requireRole("teacher", "admin");
 
-  // Unified "All Tests" list for the signed-in teacher: exams (quiz/written/problem/project)
-  // merged with legacy assignments (project), newest first, 20-per-page style pagination.
-  // New projects are saved in Exams (kind="project") with their link/file slots as
-  // Questions; the Assignment collection is only read here for backward compatibility.
+  // Unified "All Tests" list for the signed-in teacher: every exam kind
+  // (quiz/written/problem/project), newest first, 20-per-page style pagination.
   // A test whose deadline has passed is reported in the exclusive "archived" bucket.
   r.get("/my-tests", requireAuth, ...verified, teacherOrAdmin, validate(pagination.extend({
     type: z.enum(["quiz", "written", "problem", "project"]).optional(),
@@ -39,42 +40,37 @@ export function learningRouter(deps: { requireAuth: any; verified: any[]; option
     const searchFilter: any = esc
       ? { $or: [{ title: { $regex: esc, $options: "i" } }, { description: { $regex: esc, $options: "i" } }, { videoId: { $regex: esc, $options: "i" } }] }
       : {};
-    const wantLegacyProjects = !query.type || query.type === "project";
     const excluded: string[] = String(query.exclude ?? "").split(",").map((s: string) => s.trim()).filter(Boolean);
     const examKind = query.type ? { kind: query.type } : excluded.length ? { kind: { $nin: excluded } } : {};
-    const legacyKindOk = !excluded.includes("project");
-    const [exams, assignments] = await Promise.all([
-      Exam.find({ ownerId, ...examKind, ...searchFilter }).sort({ createdAt: -1 }).lean(),
-      wantLegacyProjects && legacyKindOk ? Assignment.find({ ownerId, ...searchFilter }).sort({ createdAt: -1 }).lean() : Promise.resolve([]),
-    ]);
+    const exams = await Exam.find({ ownerId, ...examKind, ...searchFilter }).sort({ createdAt: -1 }).lean();
     const now = Date.now();
-    const norm = (d: any, source: "exam" | "assignment") => {
-      const deadline = source === "exam" ? (d.endsAt ?? null) : (d.dueAt ?? null);
+    const norm = (d: any) => {
+      const deadline = d.endsAt ?? null;
       const archived = deadline ? new Date(deadline).getTime() < now : false;
       return {
-        _id: String(d._id), source,
-        kind: source === "assignment" ? "project" : (d.kind ?? "quiz"),
+        _id: String(d._id), source: "exam" as const,
+        kind: d.kind ?? "quiz",
         title: d.title, description: d.description ?? "", tags: d.tags ?? [],
-        visibility: d.visibility, status: d.status, price: d.price ?? 0, currency: d.currency ?? "BDT",
+        visibility: d.visibility, status: d.status, price: d.price ?? 0, currency: d.currency ?? "USD",
         videoId: d.videoId ?? "", deadline,
-        questionCount: source === "exam" ? (d.questionIds?.length ?? 0) : 0,
-        maxAttempts: source === "exam" ? d.maxAttempts : null,
-        maxScore: source === "assignment" ? d.maxScore : (d.maxScore ?? null),
+        questionCount: d.questionIds?.length ?? 0,
+        maxAttempts: d.maxAttempts,
+        maxScore: d.maxScore ?? null,
         archived,
         createdAt: d.createdAt, updatedAt: d.updatedAt,
       };
     };
-    const all = [...exams.map((d: any) => norm(d, "exam")), ...assignments.map((d: any) => norm(d, "assignment"))]
+    const all = exams.map(norm)
       .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt) || +new Date(b.updatedAt) - +new Date(a.updatedAt));
-    const bucket = (t: any) => (t.archived ? "archived" : t.status === "published" ? "published" : "drafts");
+    const bucket = (x: any) => (x.archived ? "archived" : x.status === "published" ? "published" : "drafts");
     const counts = {
       all: all.length,
-      published: all.filter((t) => bucket(t) === "published").length,
-      drafts: all.filter((t) => bucket(t) === "drafts").length,
-      archived: all.filter((t) => bucket(t) === "archived").length,
+      published: all.filter((x) => bucket(x) === "published").length,
+      drafts: all.filter((x) => bucket(x) === "drafts").length,
+      archived: all.filter((x) => bucket(x) === "archived").length,
     };
-    let filtered = query.tab === "all" ? all : all.filter((t) => bucket(t) === query.tab);
-    if (query.status && ["published", "draft"].includes(query.status)) filtered = filtered.filter((t) => t.status === query.status);
+    let filtered = query.tab === "all" ? all : all.filter((x) => bucket(x) === query.tab);
+    if (query.status && ["published", "draft"].includes(query.status)) filtered = filtered.filter((x) => x.status === query.status);
     ok(res, { items: filtered.slice(skip, skip + limit), total: filtered.length, page: query.page, limit, counts });
   }));
 
@@ -85,16 +81,16 @@ export function learningRouter(deps: { requireAuth: any; verified: any[]; option
     const [docs, total] = await Promise.all([Exam.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(), Exam.countDocuments(filter)]);
     // Owners keep their question IDs; everyone else gets only the count.
     const items = docs.map((e: any) => {
-      const { questionIds, ...rest } = e;
+      const { questionIds, rubric, ...rest } = e;
       const questionCount = (questionIds ?? []).length;
-      return mine ? { ...rest, questionIds, questionCount } : { ...rest, questionCount };
+      return mine ? { ...rest, questionIds, rubric, questionCount } : { ...rest, questionCount };
     });
     ok(res, { items, total });
   }));
   r.get("/exams/:id", optionalAuth, validate(idParam, "params"), asyncHandler(async (req, res) => {
     const doc = await Exam.findById(p(req).id); if (!doc) throw notFound();
     const owner = req.user && isOwnerOrAdmin(req.user, doc.ownerId);
-    if (!owner && doc.status !== "published") throw notFound();
+    if (!owner && (doc.status !== "published" || doc.visibility === "private")) throw notFound();
     if (!owner && doc.price > 0 && (!req.user || !(await canAccessPaid(req.user, doc, "exam", doc.id)))) throw forbidden("Purchase required");
     const o: any = doc.toObject(); if (!owner) delete o.questionIds;
     ok(res, o);
@@ -134,7 +130,7 @@ export function learningRouter(deps: { requireAuth: any; verified: any[]; option
     ok(res, {
       _id: String(doc._id), ownerId: doc.ownerId, title: doc.title, description: doc.description ?? "",
       tags: doc.tags ?? [], visibility: doc.visibility, status: doc.status,
-      price: doc.price ?? 0, currency: doc.currency ?? "BDT",
+      price: doc.price ?? 0, currency: doc.currency ?? "USD",
       kind: doc.kind ?? "quiz", durationMinutes: doc.durationMinutes, maxAttempts: doc.maxAttempts,
       accessPolicy: doc.accessPolicy, passingMarks: doc.passingMarks ?? 0,
       startsAt: doc.startsAt ?? null, endsAt: doc.endsAt ?? null,
@@ -162,7 +158,7 @@ export function learningRouter(deps: { requireAuth: any; verified: any[]; option
   };
   const examBody = contentBody.extend(examExtras);
   r.post("/exams", requireAuth, ...verified, teacherOrAdmin, validate(examBody), asyncHandler(async (req, res) => {
-    await checkExamQuestions(req.body.questionIds ?? [], req.body.passingMarks ?? 0);
+    await checkExamQuestions(req.body.questionIds ?? [], req.body.passingMarks ?? 0, req.user!.id, req.user!.role === "admin");
     ok(res, await Exam.create({ ...req.body, ownerId: req.user!.id }), 201);
   }));
   r.patch("/exams/:id", requireAuth, ...verified, validate(idParam, "params"), validate(examBody.partial()), asyncHandler(async (req, res) => {
@@ -171,13 +167,13 @@ export function learningRouter(deps: { requireAuth: any; verified: any[]; option
     const questionIds = (req.body.questionIds ?? doc.questionIds ?? []).map(String);
     const passingMarks = Number(req.body.passingMarks ?? doc.passingMarks ?? 0);
     if (req.body.questionIds !== undefined || req.body.passingMarks !== undefined)
-      await checkExamQuestions(questionIds, passingMarks);
+      await checkExamQuestions(questionIds, passingMarks, req.user!.id, req.user!.role === "admin");
     Object.assign(doc, req.body); await doc.save(); ok(res, doc);
   }));
 
   // Attempts — answers are private to the student, the owning teacher, and admin
   r.post("/exams/:id/attempts", requireAuth, ...verified, requireRole("student", "admin"), validate(idParam, "params"), asyncHandler(async (req, res) => {
-    const exam = await Exam.findById(p(req).id); if (!exam || exam.status !== "published") throw notFound();
+    const exam = await Exam.findById(p(req).id); if (!exam || exam.status !== "published" || exam.visibility === "private") throw notFound();
     if (exam.startsAt && new Date() < exam.startsAt) throw forbidden("Exam not yet open");
     if (exam.endsAt && new Date() > exam.endsAt) throw forbidden("Exam closed");
     if (!(await canAccessPaid(req.user!, exam, "exam", exam.id))) throw forbidden("Purchase required");
@@ -286,7 +282,7 @@ export function learningRouter(deps: { requireAuth: any; verified: any[]; option
     const prevAttempts = await ExamAttempt.find({
       studentId: a.studentId, examId: a.examId, state: "submitted", _id: { $ne: a._id },
     }).lean();
-    await deleteSuperseded(String(a.studentId), [], prevAttempts);
+    await deleteSuperseded(String(a.studentId), prevAttempts);
     ok(res, a);
   }));
   r.get("/exam-attempts/me", requireAuth, validate(pagination, "query"), asyncHandler(async (req, res) => {
@@ -363,8 +359,8 @@ export function learningRouter(deps: { requireAuth: any; verified: any[]; option
   }));
 
   // Flat per-submission queue for the teacher: one row per student's current
-  // submission (latest per student per test) across written/project exams and
-  // legacy assignments. Submissions & Feedback uses state=pending, the Archive
+  // submission (latest per student per test) across written/project exams.
+  // Submissions & Feedback uses state=pending, the Archive
   // uses state=graded — graded work never appears in the pending view.
   // Only submitted work counts: in_progress attempts are never submissions.
   r.get("/submission-queue/items", requireAuth, ...verified, teacherOrAdmin, validate(pagination.extend({
@@ -377,21 +373,13 @@ export function learningRouter(deps: { requireAuth: any; verified: any[]; option
     const ownerId = req.user!.id;
     const esc = String(query.search ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const titleRx = esc ? new RegExp(esc, "i") : null;
-    const examKindFilter: any = query.type && query.type !== "project" ? { kind: query.type } : {};
-    const wantLegacy = !query.type || query.type === "project";
-    const [exams, assignments] = await Promise.all([
-      Exam.find({ ownerId, kind: { $in: ["written", "project"] }, ...examKindFilter }).select("_id title kind").lean(),
-      wantLegacy ? Assignment.find({ ownerId }).select("_id title").lean() : Promise.resolve([]),
-    ]);
+    const examKindFilter: any = query.type ? { kind: query.type } : {};
+    const exams = await Exam.find({ ownerId, kind: { $in: ["written", "project"] }, ...examKindFilter }).select("_id title kind").lean();
     const examById = new Map(exams.map((e: any) => [String(e._id), e]));
-    const assignById = new Map(assignments.map((a: any) => [String(a._id), a]));
     const allExamIds = [...examById.keys()];
-    const allAssignIds = [...assignById.keys()];
     const titleExamIds = allExamIds.filter((id) => !titleRx || titleRx.test(examById.get(id)?.title ?? ""));
-    const titleAssignIds = allAssignIds.filter((id) => !titleRx || titleRx.test(assignById.get(id)?.title ?? ""));
     const graded = String(query.state ?? "pending") === "graded";
     const attemptStates = graded ? ["graded"] : ["submitted"];
-    const submissionStates = graded ? ["graded"] : ["submitted", "under_review", "returned"];
     const dateFilter: any = {};
     if (query.from || query.to) {
       dateFilter.createdAt = {};
@@ -414,22 +402,12 @@ export function learningRouter(deps: { requireAuth: any; verified: any[]; option
       if (!or.length) return { [field]: { $in: [] } };
       return or.length === 1 ? or[0] : { $or: or };
     };
-    const [attemptGroups, submissionGroups] = await Promise.all([
-      allExamIds.length ? ExamAttempt.aggregate([
-        { $match: { ...idScope("examId", titleExamIds, allExamIds), state: { $in: attemptStates }, ...dateFilter } },
-        { $sort: { createdAt: -1 } },
-        { $group: { _id: { test: "$examId", student: "$studentId" }, doc: { $first: "$$ROOT" } } },
-      ]) : Promise.resolve([]),
-      allAssignIds.length ? Submission.aggregate([
-        { $match: { ...idScope("assignmentId", titleAssignIds, allAssignIds), state: { $in: submissionStates }, ...dateFilter } },
-        { $sort: { createdAt: -1 } },
-        { $group: { _id: { test: "$assignmentId", student: "$studentId" }, doc: { $first: "$$ROOT" } } },
-      ]) : Promise.resolve([]),
-    ]);
-    const flat: { doc: any; source: "exam" | "assignment" }[] = [
-      ...attemptGroups.map((g: any) => ({ doc: g.doc, source: "exam" as const })),
-      ...submissionGroups.map((g: any) => ({ doc: g.doc, source: "assignment" as const })),
-    ];
+    const attemptGroups = allExamIds.length ? await ExamAttempt.aggregate([
+      { $match: { ...idScope("examId", titleExamIds, allExamIds), state: { $in: attemptStates }, ...dateFilter } },
+      { $sort: { createdAt: -1 } },
+      { $group: { _id: { test: "$examId", student: "$studentId" }, doc: { $first: "$$ROOT" } } },
+    ]) : [];
+    const flat: { doc: any; source: "exam" }[] = attemptGroups.map((g: any) => ({ doc: g.doc, source: "exam" as const }));
     const sids = [...new Set(flat.map((f) => String(f.doc.studentId)))];
     const sprofiles = sids.length
       ? await Profile.find({ userId: { $in: sids } }).select("userId name email avatarUploadId").lean().catch(() => [])
@@ -442,13 +420,13 @@ export function learningRouter(deps: { requireAuth: any; verified: any[]; option
     const items = flat.map(({ doc, source }) => {
       const a: any = doc;
       const s: any = bySid.get(String(a.studentId));
-      const test: any = source === "exam" ? examById.get(String(a.examId)) : assignById.get(String(a.assignmentId));
+      const test: any = examById.get(String(a.examId));
       return {
         id: String(a._id),
         source,
-        testId: source === "exam" ? String(a.examId) : String(a.assignmentId),
-        testTitle: test?.title ?? (source === "exam" ? "Test" : "Project"),
-        kind: source === "exam" ? String(test?.kind ?? "written") : "project",
+        testId: String(a.examId),
+        testTitle: test?.title ?? "Test",
+        kind: String(test?.kind ?? "written"),
         student: {
           userId: String(a.studentId),
           name: s?.name || "Unnamed student",
@@ -456,8 +434,8 @@ export function learningRouter(deps: { requireAuth: any; verified: any[]; option
           avatarUploadId: s?.avatarUploadId ?? null,
         },
         state: a.state,
-        score: source === "exam" ? (a.score ?? null) : (a.grade ?? null),
-        attemptNumber: source === "exam" ? (a.attemptNumber ?? null) : null,
+        score: a.score ?? null,
+        attemptNumber: a.attemptNumber ?? null,
         submittedAt: a.submittedAt ?? a.createdAt ?? null,
       };
     }).sort((x, y) => dateMs(y.submittedAt) - dateMs(x.submittedAt));
@@ -466,42 +444,6 @@ export function learningRouter(deps: { requireAuth: any; verified: any[]; option
     ok(res, { items: items.slice(start, start + limit), total, page, limit });
   }));
 
-  r.post("/assignments", requireAuth, ...verified, teacherOrAdmin, validate(contentBody.extend({ dueAt: z.string().datetime().optional(), maxScore: z.number().min(1).max(10000).default(100), maxAttempts: z.number().int().min(1).max(20).nullable().default(1), videoId: z.string().max(100).optional().default("") })), asyncHandler(async (req, res) => ok(res, await Assignment.create({ ...req.body, ownerId: req.user!.id }), 201)));
-  r.get("/assignments", optionalAuth, validate(pagination, "query"), asyncHandler(async (req, res) => {
-    const { skip, limit } = paginate(q(req));
-    const filter: any = req.query.mine === "1" && req.user ? { ownerId: req.user.id } : { status: "published", visibility: "public" };
-    const [items, total] = await Promise.all([Assignment.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(), Assignment.countDocuments(filter)]);
-    ok(res, { items, total });
-  }));
-  r.get("/assignments/:id", optionalAuth, validate(idParam, "params"), asyncHandler(async (req, res) => {
-    const doc = await Assignment.findById(p(req).id); if (!doc) throw notFound();
-    if (!(req.user && isOwnerOrAdmin(req.user, doc.ownerId)) && doc.status !== "published") throw notFound();
-    ok(res, doc);
-  }));
-  const assignmentPatch = contentBody.partial().extend({
-    dueAt: z.string().datetime().nullable().optional(),
-    maxScore: z.number().min(1).max(10000).optional(),
-    maxAttempts: z.number().int().min(1).max(20).nullable().optional(),
-    videoId: z.string().max(100).optional(),
-    passingMarks: z.number().min(0).optional(),
-    playlistId: z.string().max(100).nullable().optional(),
-    submissionTypes: z.array(z.string().max(20)).max(10).optional(),
-    maxFileSize: z.string().max(50).optional(),
-    maxFiles: z.number().int().min(1).max(10).optional(),
-    rubric: z.unknown().optional(),
-  });
-  r.patch("/assignments/:id", requireAuth, ...verified, teacherOrAdmin, validate(idParam, "params"), validate(assignmentPatch), asyncHandler(async (req, res) => {
-    const doc: any = await Assignment.findById(p(req).id); if (!doc) throw notFound();
-    if (!isOwnerOrAdmin(req.user!, doc.ownerId)) throw forbidden("Only the owner may edit this test");
-    Object.assign(doc, req.body); await doc.save(); ok(res, doc);
-  }));
-  r.delete("/assignments/:id", requireAuth, ...verified, teacherOrAdmin, validate(idParam, "params"), asyncHandler(async (req, res) => {
-    const doc: any = await Assignment.findById(p(req).id); if (!doc) throw notFound();
-    if (!isOwnerOrAdmin(req.user!, doc.ownerId)) throw forbidden("Only the owner may delete this test");
-    await Submission.deleteMany({ assignmentId: String(doc._id) });
-    await Assignment.deleteOne({ _id: doc._id });
-    ok(res, { id: String(doc._id) });
-  }));
   r.delete("/exams/:id", requireAuth, ...verified, teacherOrAdmin, validate(idParam, "params"), asyncHandler(async (req, res) => {
     const doc: any = await Exam.findById(p(req).id); if (!doc) throw notFound();
     if (!isOwnerOrAdmin(req.user!, doc.ownerId)) throw forbidden("Only the owner may delete this test");
@@ -520,65 +462,5 @@ export function learningRouter(deps: { requireAuth: any; verified: any[]; option
     ok(res, { id: String(doc._id), deletedQuestions: delIds.length });
   }));
 
-  r.post("/submissions", requireAuth, ...verified, requireRole("student", "admin"), validate(z.object({
-    assignmentId: z.string().min(1).max(100), uploadId: z.string().max(100).nullable().optional(),
-    repoUrl: httpUrl.optional().or(z.literal("")), liveUrl: httpUrl.optional().or(z.literal("")),
-  })), asyncHandler(async (req, res) => {
-    const a = await Assignment.findById(req.body.assignmentId); if (!a || a.status !== "published") throw notFound("Assignment not found");
-    const sid = String(req.user!.id);
-    // Resubmission replaces previous ungraded work (graded history is permanent).
-    const prev = await Submission.find({ studentId: sid, assignmentId: String(a._id), state: { $ne: "graded" } }).lean();
-    const keptGraded = await Submission.countDocuments({ studentId: sid, assignmentId: String(a._id), state: "graded" });
-    // The cap applies to retained submissions: replacing ungraded work never consumes it.
-    if (a.maxAttempts != null && keptGraded + 1 > a.maxAttempts) throw conflict("Submission limit reached");
-    const created = await Submission.create({ ...req.body, studentId: sid });
-    // Previous ungraded submissions and their files (incl. PDFs) are superseded — never throws.
-    await deleteSuperseded(sid, prev, []);
-    ok(res, created, 201);
-  }));
-  r.get("/submissions/me", requireAuth, validate(pagination, "query"), asyncHandler(async (req, res) => {
-    const { skip, limit } = paginate(q(req));
-    const [items, total] = await Promise.all([Submission.find({ studentId: req.user!.id }).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(), Submission.countDocuments({ studentId: req.user!.id })]);
-    ok(res, { items, total });
-  }));
-  r.get("/submissions/:id", requireAuth, validate(idParam, "params"), asyncHandler(async (req, res) => {
-    const s = await Submission.findById(p(req).id); if (!s) throw notFound();
-    const a = await Assignment.findById(s.assignmentId);
-    const allowed = s.studentId === req.user!.id || req.user!.role === "admin" || (a && a.ownerId === req.user!.id);
-    if (!allowed) throw forbidden();
-    if (s.studentId === req.user!.id && req.user!.role === "student" && s.state !== "graded") { const o: any = s.toObject(); o.grade = null; o.feedback = ""; return ok(res, o); }
-    ok(res, s);
-  }));
-  r.get("/assignments/:id/submissions", requireAuth, ...verified, validate(idParam, "params"), validate(pagination.extend({
-    // latest=1 → only the current (newest) submission per student, for teacher feedback.
-    latest: z.string().optional(),
-  }), "query"), asyncHandler(async (req, res) => {
-    const a = await Assignment.findById(p(req).id); if (!a) throw notFound();
-    if (!isOwnerOrAdmin(req.user!, a.ownerId)) throw forbidden("Only the assignment owner may list submissions");
-    const { skip, limit } = paginate(q(req));
-    const page = q(req).page;
-    if (String(q(req).latest ?? "") === "1") {
-      const agg: any[] = await Submission.aggregate([
-        { $match: { assignmentId: a.id } },
-        { $sort: { createdAt: -1 } },
-        { $group: { _id: "$studentId", doc: { $first: "$$ROOT" } } },
-        { $replaceRoot: { newRoot: "$doc" } },
-        { $sort: { createdAt: -1 } },
-        { $facet: { items: [{ $skip: skip }, { $limit: limit }], total: [{ $count: "n" }] } },
-      ]);
-      const items = agg[0]?.items ?? [];
-      const total = agg[0]?.total?.[0]?.n ?? 0;
-      return ok(res, { items, total, page, limit });
-    }
-    const [items, total] = await Promise.all([Submission.find({ assignmentId: a.id }).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(), Submission.countDocuments({ assignmentId: a.id })]);
-    ok(res, { items, total, page, limit });
-  }));
-  r.patch("/submissions/:id/grade", requireAuth, ...verified, teacherOrAdmin, validate(idParam, "params"), validate(z.object({ grade: z.number().min(0).max(100000), feedback: z.string().max(5000).default("") })), asyncHandler(async (req, res) => {
-    const s = await Submission.findById(p(req).id); if (!s) throw notFound();
-    const a = await Assignment.findById(s.assignmentId); if (!a) throw notFound();
-    if (!isOwnerOrAdmin(req.user!, a.ownerId)) throw forbidden("Only the assignment owner may grade");
-    if (req.body.grade > a.maxScore) throw forbidden("Grade exceeds maxScore");
-    s.grade = req.body.grade; s.feedback = req.body.feedback; s.state = "graded"; await s.save(); ok(res, s);
-  }));
   return r;
 }

@@ -3,6 +3,7 @@ import { Suspense, use, useMemo } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Empty, ErrorBox, Loading, useToast } from "@/components/ui";
+import { useDialog } from "@/components/AlertDialog";
 import { Engagement, PlaylistRating } from "@/components/purchase";
 import { PriceTag } from "@/components/cards";
 import { SaveButton } from "@/lib/saved";
@@ -22,6 +23,7 @@ function PlaylistDetailInner({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const search = useSearchParams();
   const toast = useToast();
+  const { promptReason } = useDialog();
   const fromParam = search.get("from");
   const backHref =
     fromParam === "home" ? "/student?tab=playlists"
@@ -79,7 +81,7 @@ function PlaylistDetailInner({ params }: { params: Promise<{ id: string }> }) {
 
   const report = async () => {
     if (!current) return;
-    const reason = window.prompt("Why are you reporting this video? (at least 3 characters)");
+    const reason = await promptReason({ title: "Report this video", label: "Why are you reporting this video?", placeholder: "Describe the problem (at least 3 characters)…", confirmLabel: "Send report", danger: true });
     if (!reason) return;
     try {
       await apiPost("/api/v1/reports", { targetType: "video", targetId: current._id, reason });

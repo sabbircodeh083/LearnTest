@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Badge, Btn, Empty, ErrorBox, inputCls, Loading, PageHead, useToast } from "@/components/ui";
 import { apiGet, apiPost, ApiError, qs } from "@/lib/api";
+import { ModalShell } from "@/components/AlertDialog";
 import { useFetch } from "@/lib/hooks";
 import { fmtDate, fmtMoney } from "@/lib/types";
 
@@ -131,9 +132,7 @@ function ManageModal({ teacher, onClose, onDone }: { teacher: TeacherPayout; onC
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={`Manage payout for ${t.email}`}>
-      <button type="button" aria-label="Close payout manager" className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-line bg-card p-6 shadow-xl">
+    <ModalShell label={`Manage payout for ${t.email}`} onClose={onClose} maxWidth="max-w-lg">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-bold">Manage Payout</h2>
@@ -169,7 +168,7 @@ function ManageModal({ teacher, onClose, onDone }: { teacher: TeacherPayout; onC
           <h3 className="text-sm font-bold">Record a manual payout</h3>
           <div className="mt-2 grid gap-3 sm:grid-cols-2">
             <label className="block">
-              <span className="mb-1.5 block text-sm font-medium">Amount (BDT) <span aria-hidden className="text-danger">*</span></span>
+              <span className="mb-1.5 block text-sm font-medium">Amount (USD) <span aria-hidden className="text-danger">*</span></span>
               <input type="number" min={0} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)}
                 placeholder={t.duePayout > 0 ? `Up to ${t.duePayout}` : "Nothing due"} className={inputCls} />
             </label>
@@ -207,8 +206,7 @@ function ManageModal({ teacher, onClose, onDone }: { teacher: TeacherPayout; onC
               </ul>
             )}
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }
 

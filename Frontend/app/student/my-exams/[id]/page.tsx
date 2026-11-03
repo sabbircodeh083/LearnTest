@@ -3,8 +3,10 @@ import { Suspense, use, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Badge, Btn, ErrorBox, Loading, Notice, PageHead, statusTone, useToast, inputCls, type BadgeTone } from "@/components/ui";
+import { useDialog } from "@/components/AlertDialog";
 import { questionBadge } from "@/components/cards";
 import { apiBlobUrl, apiDownload, apiGet, apiPatch, apiPost, apiUpload, ApiError } from "@/lib/api";
+import { safeExternalUrl } from "@/lib/url";
 import { useFetch } from "@/lib/hooks";
 import { RateDialog } from "@/components/RateDialog";
 import type { Exam, ExamAttempt, Question, UploadDoc } from "@/lib/types";
@@ -52,7 +54,7 @@ function SubmittedAnswerPdf({ uploadId, filename }: { uploadId: string; filename
         </button>
       </div>
       {open && url && (
-        <iframe src={url} title={`Submitted answer ${filename}`} className="mt-2 h-[480px] w-full rounded-lg border border-line bg-card" />
+        <iframe sandbox="" src={url} title={`Submitted answer ${filename}`} className="mt-2 h-[480px] w-full rounded-lg border border-line bg-card" />
       )}
     </div>
   );
@@ -201,9 +203,10 @@ function AttemptPageInner({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const search = useSearchParams();
   const fromResults = search.get("from") === "results";
-  const backHref = fromResults ? "/student/results" : "/student/submissions";
+  const backHref = fromResults ? "/student/graded-submissions" : "/student/submissions";
   const backLabel = fromResults ? "Results & Feedback" : "My Submissions";
   const toast = useToast();
+  const { confirm } = useDialog();
   const attempt = useFetch(() => apiGet<ExamAttempt>(`/api/v1/exam-attempts/${id}`), [id]);
   const questions = useFetch(() => apiGet<{ items: Question[] }>(`/api/v1/exam-attempts/${id}/questions`), [id]);
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
@@ -324,7 +327,17 @@ function AttemptPageInner({ params }: { params: Promise<{ id: string }> }) {
       }
       setProjectError("");
     }
-    if (!window.confirm("Submit this attempt now? You cannot edit answers after submitting.")) return;
+    // Non-project kinds: a completely blank submission must not go through
+    // silently, and a partial one must say how much is unanswered.
+    const itemsAll = questions.data?.items ?? [];
+    const isAnswered = (v: unknown) => v !== undefined && v !== null && !(typeof v === "string" && !v.trim()) && !(Array.isArray(v) && v.length === 0);
+    const unanswered = itemsAll.filter((q) => !isAnswered(answers[q._id])).length;
+    if (exam.data?.kind !== "project" && itemsAll.length > 0 && unanswered === itemsAll.length) {
+      toast("You have not answered any questions yet — answer at least one before submitting.", "err");
+      return;
+    }
+    const partialNote = exam.data?.kind !== "project" && unanswered > 0 ? ` ${unanswered} of ${itemsAll.length} question${itemsAll.length === 1 ? "" : "s"} still unanswered.` : "";
+    if (!(await confirm({ title: "Submit this attempt now?", message: `You cannot edit answers after submitting.${partialNote}`, confirmLabel: "Submit" }))) return;
     setBusy(true);
     try {
       const res = await apiPatch<ExamAttempt>(`/api/v1/exam-attempts/${id}/submit`, { answers });
@@ -437,7 +450,7 @@ function AttemptPageInner({ params }: { params: Promise<{ id: string }> }) {
                     <div key={i} className="flex items-center gap-2.5 rounded-lg border border-line p-3">
                       <span aria-hidden className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line text-xs font-semibold">{i + 1}</span>
                       <p className="min-w-0 flex-1 truncate text-sm font-bold">{p.title}</p>
-                      {p.url && <a href={p.url} target="_blank" rel="noreferrer"
+                      {safeExternalUrl(p.url) && <a href={safeExternalUrl(p.url) ?? "#"} target="_blank" rel="noreferrer"
                         className="inline-flex shrink-0 items-center gap-1 rounded-md bg-[#1d6ce0] px-2.5 py-1.5 text-xs font-semibold text-white hover:brightness-110">Solve</a>}
                     </div>
                   ))}

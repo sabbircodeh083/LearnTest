@@ -3,6 +3,8 @@ import bcrypt from "bcrypt";
 import { assertSignupRole } from "../src/auth/auth.js";
 import { evaluateValidation, canTransition } from "../src/modules/payments/payment-state.js";
 import { mimeMatchesExt, PURPOSE_RULES } from "../src/modules/uploads.routes.js";
+import { formatZodError } from "../src/common/middleware.js";
+import { contentBody } from "../src/common/schemas.js";
 
 const order = { tranId: "LT-1", amount: 500, currency: "BDT" };
 const valid = { status: "VALID", tran_id: "LT-1", amount: "500.00", currency: "BDT", risk_level: "0", val_id: "v1" };
@@ -56,6 +58,20 @@ describe("payment validation state machine (§7, §15)", () => {
     expect(canTransition("paid", "paid")).toBe(true); // duplicate IPN = no-op
     expect(canTransition("paid", "failed")).toBe(false);
     expect(canTransition("failed", "paid")).toBe(false);
+  });
+});
+
+describe("validation error messages", () => {
+  it("names the offending field and rule instead of a generic message", () => {
+    const r = contentBody.safeParse({ title: "", price: -5, currency: "EUR" });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const msg = formatZodError(r.error);
+      expect(msg).toContain("title");
+      expect(msg).toContain("price");
+      expect(msg).toContain("currency");
+      expect(msg).not.toBe("Invalid input");
+    }
   });
 });
 

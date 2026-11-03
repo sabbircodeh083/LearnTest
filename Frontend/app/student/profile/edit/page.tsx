@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Btn, ErrorBox, Field, inputCls, Loading, useToast } from "@/components/ui";
 import { apiPatch, apiUpload, ApiError } from "@/lib/api";
+import { safeExternalUrl } from "@/lib/url";
 import { useAuth } from "@/lib/auth";
+import { usePublicConfig } from "@/lib/hooks";
 import {
   AvatarImg,
   CoverBanner,
@@ -23,6 +25,10 @@ export default function StudentProfileEditPage() {
   const router = useRouter();
   const toast = useToast();
   const { user, loading, refresh } = useAuth();
+  // Image cap comes from GET /api/v1/config (backend .env) — never hardcoded.
+  const { config } = usePublicConfig();
+  const maxImageMB = config?.uploadLimits.image.sizeMB;
+  const maxImageBytes = maxImageMB ? maxImageMB * 1024 * 1024 : null;
 
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
@@ -64,7 +70,7 @@ export default function StudentProfileEditPage() {
   const pickImage = (file: File | undefined, kind: "avatar" | "cover") => {
     if (!file) return;
     if (!/\.(png|jpe?g|webp)$/i.test(file.name)) { toast("Only PNG, JPG or WebP images are allowed.", "err"); return; }
-    if (file.size > 5 * 1024 * 1024) { toast("Image must be under 5MB.", "err"); return; }
+    if (maxImageBytes && file.size > maxImageBytes) { toast(`Image must be under ${maxImageMB}MB.`, "err"); return; }
     const url = URL.createObjectURL(file);
     if (kind === "avatar") {
       if (avatarPreview) URL.revokeObjectURL(avatarPreview);
@@ -78,19 +84,25 @@ export default function StudentProfileEditPage() {
   };
 
   const addSkill = () => {
-    const s = draftSkill.trim().slice(0, 40);
-    if (!s) return;
-    if (skills.length >= 20) { toast("You can add up to 20 interests.", "err"); return; }
-    if (skills.some((x) => x.toLowerCase() === s.toLowerCase())) { setDraftSkill(""); return; }
-    setSkills((prev) => [...prev, s]);
+    const raw = draftSkill.trim();
+    if (!raw) { toast("Type an interest first, then press Enter to add it.", "err"); return; }
+    if (raw.length > 40) { toast("Each interest must be 40 characters or less.", "err"); return; }
+    if (skills.length >= 20) { toast("You can add up to 20 interests — remove one first.", "err"); return; }
+    if (skills.some((x) => x.toLowerCase() === raw.toLowerCase())) { toast(`"${raw}" is already in your interests.`, "err"); setDraftSkill(""); return; }
+    setSkills((prev) => [...prev, raw]);
     setDraftSkill("");
   };
 
   const save = async () => {
-    if (!name.trim()) { toast("Full name cannot be empty.", "err"); return; }
+    if (draftSkill.trim()) { toast("Press Enter to add your typed interest before saving (or clear it).", "err"); return; }
+    if (!name.trim()) { toast("Full name is required.", "err"); return; }
     if (username.trim() && !/^[A-Za-z0-9_]+$/.test(username.trim())) {
       toast("Username may only contain letters, numbers and underscores.", "err");
       return;
+    }
+    for (const [key, value] of Object.entries(socials)) {
+      const v = value.trim();
+      if (v && !safeExternalUrl(v)) { toast(`Enter a valid http(s) URL for ${key}.`, "err"); return; }
     }
     setSaving(true);
     try {
@@ -170,7 +182,7 @@ export default function StudentProfileEditPage() {
                   <input type="file" accept=".png,.jpg,.jpeg,.webp" className="hidden"
                     onChange={(e) => { pickImage(e.target.files?.[0], "avatar"); e.target.value = ""; }} />
                 </label>
-                <p className="text-xs text-muted">{avatarPreview ? "Preview — applies when you Save Changes" : "JPG, PNG up to 5MB"}</p>
+                <p className="text-xs text-muted">{avatarPreview ? "Preview — applies when you Save Changes" : maxImageMB ? `JPG, PNG up to ${maxImageMB}MB` : "JPG, PNG (server limit applies)"}</p>
               </div>
             </div>
           </section>

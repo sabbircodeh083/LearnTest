@@ -2,6 +2,7 @@
 import { use } from "react";
 import Link from "next/link";
 import { Badge, Btn, ErrorBox, Loading, statusTone, useToast } from "@/components/ui";
+import { useDialog } from "@/components/AlertDialog";
 import { apiGet, apiPatch, ApiError } from "@/lib/api";
 import { useFetch } from "@/lib/hooks";
 import { fmtDate } from "@/lib/types";
@@ -17,16 +18,17 @@ interface ContentDetail {
 export default function AdminReportedContentPage({ params }: { params: Promise<{ targetType: string; targetId: string }> }) {
   const { targetType, targetId } = use(params);
   const toast = useToast();
+  const { promptReason } = useDialog();
   const { data, error, loading, retry } = useFetch(
     () => apiGet<ContentDetail>(`/api/v1/admin/content/${targetType}/${targetId}`),
     [targetType, targetId],
   );
 
   const moderate = async (action: "hide" | "restore" | "reject") => {
-    const reason = window.prompt(`Reason for "${action}" on this ${targetType}? (required)`);
-    if (!reason || reason.trim().length < 3) { if (reason !== null) toast("A reason of at least 3 characters is required.", "err"); return; }
+    const reason = await promptReason({ title: `${action.charAt(0).toUpperCase()}${action.slice(1)} this ${targetType}?`, label: "Reason (required, at least 3 characters)", confirmLabel: "Save moderation", danger: action !== "restore" });
+    if (!reason) return;
     try {
-      await apiPatch(`/api/v1/admin/content/${targetType}/${targetId}/moderation`, { action, reason: reason.trim() });
+      await apiPatch(`/api/v1/admin/content/${targetType}/${targetId}/moderation`, { action, reason });
       toast("Moderation saved.");
       retry();
     } catch (e) { toast(e instanceof ApiError ? e.message : "Moderation failed.", "err"); }

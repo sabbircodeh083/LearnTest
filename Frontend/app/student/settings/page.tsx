@@ -64,8 +64,8 @@ function BlockedTeachers() {
 
       {open && (
         <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Blocked teachers">
-          <button aria-label="Close blocked teachers" className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
-          <aside className="absolute inset-y-0 right-0 flex w-full max-w-sm flex-col bg-card shadow-xl">
+          <button aria-label="Close blocked teachers" className="animate-fade-in absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={() => setOpen(false)} />
+          <aside className="animate-drawer-in absolute inset-y-0 right-0 flex w-full max-w-sm flex-col bg-card shadow-xl">
             <div className="flex items-center justify-between gap-3 border-b border-line p-5">
               <div>
                 <h3 className="text-[17px] font-bold">Blocked Teachers</h3>

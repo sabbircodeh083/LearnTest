@@ -1,11 +1,13 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Empty, Notice, useToast } from "@/components/ui";
 import { apiDelete, apiGet, apiPatch, apiPost, ApiError, qs } from "@/lib/api";
-import { useFetch } from "@/lib/hooks";
+import { useFetch, usePublicConfig } from "@/lib/hooks";
+import { checkFutureDate, checkPrice, checkTags } from "@/lib/validation";
 import type { Page, Playlist } from "@/lib/types";
+import { currencySymbol } from "@/lib/types";
 
 interface DraftQuestion {
   key: string;
@@ -114,7 +116,14 @@ export function QuizForm({ initial }: { initial?: QuizFormInitial }) {
   const [tags, setTags] = useState<string[]>(initial?.tags ?? []);
   const [pricing, setPricing] = useState<"free" | "paid">(initial?.pricing ?? "paid");
   const [price, setPrice] = useState(initial?.price ?? "");
-  const [currency, setCurrency] = useState(isEdit ? "BDT" : "");
+  const [currency, setCurrency] = useState("");
+  // Currency options and default come from GET /api/v1/config (backend .env).
+  const { config } = usePublicConfig();
+  const defaultCurrency = config?.defaultCurrency || "USD";
+  const currencies = config?.currencies?.length ? config.currencies : [defaultCurrency];
+  useEffect(() => {
+    if (!currency && config?.defaultCurrency) setCurrency(config.defaultCurrency);
+  }, [currency, config]);
   const [passingMarks, setPassingMarks] = useState(initial?.passingMarks ?? "");
   const [timeLimit, setTimeLimit] = useState(initial?.timeLimit ?? "15");
   const [attempts, setAttempts] = useState(initial?.attempts ?? "1");
@@ -185,12 +194,13 @@ export function QuizForm({ initial }: { initial?: QuizFormInitial }) {
   const save = async (nextStatus: "draft" | "published") => {
     setError("");
     if (!title.trim()) { setError("Title is required."); return; }
+    const tagErr = checkTags(tags); if (tagErr) { setError(tagErr); return; }
     if (!questions.length) { setError("Add at least one question."); return; }
     const t = Number(timeLimit);
     if (!Number.isInteger(t) || t < 1 || t > 1440) { setError("Time limit must be 1–1440 minutes."); return; }
     const att = attempts === "unlimited" ? null : Number(attempts);
     if (att !== null && (!Number.isInteger(att) || att < 1 || att > 20)) { setError("Attempts allowed must be 1–20 or No bound."); return; }
-    if (pricing === "paid" && !(Number(price) > 0)) { setError("Set a price above 0 for a paid quiz (or choose Free Quiz)."); return; }
+    if (pricing === "paid") { const pe = checkPrice(price); if (pe) { setError(pe); return; } if (!currency) { setError("Currency is required for a paid quiz — choose a currency."); return; } }
     if (totalMarks < 1) { setError("Total marks must be at least 1 — give your questions marks."); return; }
     if (passingMarks !== "" && !(passNum >= 0 && passNum <= totalMarks)) { setError(`Passing marks must be between 0 and ${totalMarks}.`); return; }
 
@@ -215,7 +225,7 @@ export function QuizForm({ initial }: { initial?: QuizFormInitial }) {
       const questionPayload = (c: { q: DraftQuestion; options: string[]; correct: number[]; marks: number }) => ({
         title: c.q.text.trim().slice(0, 200), description: "", tags,
         visibility, status: nextStatus,
-        price: 0, currency: "BDT",
+        price: 0, currency: defaultCurrency,
         type: "mcq", prompt: c.q.text.trim(), answer: "", rubric: "",
         linkedContentId: null,
         options: c.options, correctOptions: c.correct,
@@ -251,7 +261,7 @@ export function QuizForm({ initial }: { initial?: QuizFormInitial }) {
       const payload = {
         title: title.trim(), description, tags,
         visibility, status: nextStatus,
-        price: pricing === "paid" ? Number(price) : 0, currency: currency || "BDT",
+        price: pricing === "paid" ? Number(price) : 0, currency: currency || defaultCurrency,
         questionIds: ids,
         durationMinutes: t, maxAttempts: att,
         accessPolicy: pricing === "paid" ? "paid" : "free",
@@ -341,13 +351,13 @@ export function QuizForm({ initial }: { initial?: QuizFormInitial }) {
             {pricing === "paid" && (
               <div className="mt-3 grid gap-4 sm:grid-cols-2">
                 <div>
-                  <Label required>Price ({currency || "BDT"})</Label>
+                  <Label required>Price ({currency || defaultCurrency})</Label>
                   <input type="number" min={1} value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Set amount" className={inputCls} />
                   <p className="mt-1.5 text-[13px] text-muted">Set a price for this quiz. Students need to purchase to take this quiz.</p>
                 </div>
                 <div>
                   <Label required>Currency</Label>
-                  <select value={currency} onChange={(e) => setCurrency(e.target.value)} className={inputCls}><option value="" disabled>Set currency</option><option value="BDT">BDT (৳)</option><option value="USD">USD ($)</option></select>
+                  <select value={currency} onChange={(e) => setCurrency(e.target.value)} className={inputCls}><option value="" disabled>Set currency</option>{currencies.map((c) => <option key={c} value={c}>{c} ({currencySymbol(c)})</option>)}</select>
                 </div>
               </div>
             )}
@@ -566,7 +576,7 @@ export function QuizForm({ initial }: { initial?: QuizFormInitial }) {
                 ["Passing Marks", passingMarks === "" ? "—" : `${passNum} (${passPct}%)`],
                 ["Time Limit", `${timeLimit || "—"} minutes`],
                 ["Attempts Allowed", attempts === "unlimited" ? "No bound" : attempts],
-                ["Price", pricing === "paid" ? `${currency || "BDT"} ${Number(price) || 0}` : "Free"],
+                ["Price", pricing === "paid" ? `${currency || defaultCurrency} ${Number(price) || 0}` : "Free"],
                 ["Quiz Type", pricing === "paid" ? "Paid Quiz" : "Free Quiz"],
               ].map(([k, v]) => (
                 <div key={k} className="flex items-center justify-between gap-3">

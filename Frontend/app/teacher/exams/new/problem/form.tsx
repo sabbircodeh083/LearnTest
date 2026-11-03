@@ -1,11 +1,13 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Notice, useToast } from "@/components/ui";
 import { apiDelete, apiGet, apiPatch, apiPost, ApiError, qs } from "@/lib/api";
-import { useFetch } from "@/lib/hooks";
+import { useFetch, usePublicConfig } from "@/lib/hooks";
+import { checkFutureDate, checkPrice, checkTags } from "@/lib/validation";
 import type { Page, Playlist } from "@/lib/types";
+import { currencySymbol } from "@/lib/types";
 
 const inputCls =
   "w-full rounded-lg border border-line bg-card px-3.5 py-2.5 text-[15px] text-ink placeholder:text-muted/70 focus:border-brand";
@@ -128,7 +130,14 @@ export function ProblemForm({ initial }: { initial?: ProblemFormInitial }) {
   const [tags, setTags] = useState<string[]>(initial?.tags ?? []);
   const [pricing, setPricing] = useState<"free" | "paid">(initial?.pricing ?? "paid");
   const [price, setPrice] = useState(initial?.price ?? "");
-  const [currency, setCurrency] = useState(isEdit ? "BDT" : "");
+  const [currency, setCurrency] = useState("");
+  // Currency options and default come from GET /api/v1/config (backend .env).
+  const { config } = usePublicConfig();
+  const defaultCurrency = config?.defaultCurrency || "USD";
+  const currencies = config?.currencies?.length ? config.currencies : [defaultCurrency];
+  useEffect(() => {
+    if (!currency && config?.defaultCurrency) setCurrency(config.defaultCurrency);
+  }, [currency, config]);
 
   const [mode, setMode] = useState<"individual" | "list">(initial?.mode ?? "individual");
   const [problems, setProblems] = useState<Problem[]>(() =>
@@ -198,10 +207,11 @@ export function ProblemForm({ initial }: { initial?: ProblemFormInitial }) {
     } else {
       if (!draftName.trim()) { setError("Give the problem list a title."); return; }
       if (!isUrl(draftUrl)) { setError("Enter a valid list URL starting with http(s)://."); return; }
+      if (draftTopics.split(",").map((x) => x.trim()).filter(Boolean).length > 10) { setError("You can add at most 10 topics — remove some first."); return; }
       setError("");
       setLists((qs) => [...qs, {
         key: newKey(), title: draftName.trim(), url: draftUrl.trim(), blurb: draftBlurb.trim(),
-        topics: draftTopics.split(",").map((t) => t.trim()).filter(Boolean).slice(0, 10), editing: false,
+        topics: draftTopics.split(",").map((t) => t.trim()).filter(Boolean), editing: false,
       }]);
     }
     setEditorOpen(false);
@@ -210,15 +220,18 @@ export function ProblemForm({ initial }: { initial?: ProblemFormInitial }) {
   const save = async (nextStatus: "draft" | "published") => {
     setError("");
     if (!title.trim()) { setError("Title is required."); return; }
+    const tagErr = checkTags(tags); if (tagErr) { setError(tagErr); return; }
     if (!Number.isInteger(totalNum) || totalNum < 1) { setError("Total marks must be at least 1."); return; }
+    if (!passingMarks.trim()) { setError("Passing marks is required — enter 0 or more."); return; }
     if (!(passNum >= 0 && passNum <= totalNum)) { setError(`Passing marks must be between 0 and ${totalMarks}.`); return; }
-    if (!deadline) { setError("Deadline is required."); return; }
+    const dlErr = checkFutureDate("Deadline", deadline); if (dlErr) { setError(dlErr); return; }
     const att = attempts === "unlimited" ? null : Number(attempts);
     if (att !== null && (!Number.isInteger(att) || att < 1 || att > 20)) { setError("Attempts allowed must be 1–20 or No bound."); return; }
-    if (pricing === "paid" && !(Number(price) > 0)) { setError("Set a price above 0 for a paid test (or choose Free Test)."); return; }
+    if (pricing === "paid") { const pe = checkPrice(price); if (pe) { setError(pe); return; } if (!currency) { setError("Currency is required for a paid test — choose a currency."); return; } }
     const items = mode === "individual" ? problems : lists;
     if (!items.length) { setError(mode === "individual" ? "Add at least one problem link." : "Add at least one problem list link."); return; }
-    if (items.some((it) => !isUrl(it.url))) { setError("Every link must be a valid URL starting with http(s)://."); return; }
+    { const badName = items.findIndex((it) => !(mode === "individual" ? (it as Problem).name : (it as ProblemList).title).trim()); if (badName >= 0) { setError(`${mode === "individual" ? "Problem" : "List"} ${badName + 1} needs a name/title.`); return; } }
+    { const bad = items.findIndex((it) => !isUrl(it.url)); if (bad >= 0) { setError(`Link ${bad + 1} must be a valid URL starting with http(s)://.`); return; } }
 
     setBusy(nextStatus === "draft" ? "draft" : "publish");
     try {
@@ -234,7 +247,7 @@ export function ProblemForm({ initial }: { initial?: ProblemFormInitial }) {
         return {
           title: name.slice(0, 200), description: isP ? "Individual problem" : "Problem list", tags,
           visibility, status: nextStatus,
-          price: 0, currency: "BDT",
+          price: 0, currency: defaultCurrency,
           type: "code", prompt: `${name}\n${it.url}${extra ? `\n${extra}` : ""}`,
           answer: "", rubric: it.url,
           linkedContentId: null,
@@ -274,7 +287,7 @@ export function ProblemForm({ initial }: { initial?: ProblemFormInitial }) {
       const payload = {
         title: title.trim(), description, tags,
         visibility, status: nextStatus,
-        price: pricing === "paid" ? Number(price) : 0, currency: currency || "BDT",
+        price: pricing === "paid" ? Number(price) : 0, currency: currency || defaultCurrency,
         questionIds: ids,
         durationMinutes: 1440, maxAttempts: att,
         accessPolicy: pricing === "paid" ? "paid" : "free",
@@ -364,13 +377,13 @@ export function ProblemForm({ initial }: { initial?: ProblemFormInitial }) {
             {pricing === "paid" && (
               <div className="mt-3 grid gap-4 sm:grid-cols-2">
                 <div>
-                  <Label required>Price ({currency || "BDT"})</Label>
+                  <Label required>Price ({currency || defaultCurrency})</Label>
                   <input type="number" min={1} value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Set amount" className={inputCls} />
                   <p className="mt-1.5 text-[13px] text-muted">Set a price for this test. Students need to purchase to access the test.</p>
                 </div>
                 <div>
                   <Label required>Currency</Label>
-                  <select value={currency} onChange={(e) => setCurrency(e.target.value)} className={inputCls}><option value="" disabled>Set currency</option><option value="BDT">BDT (৳)</option><option value="USD">USD ($)</option></select>
+                  <select value={currency} onChange={(e) => setCurrency(e.target.value)} className={inputCls}><option value="" disabled>Set currency</option>{currencies.map((c) => <option key={c} value={c}>{c} ({currencySymbol(c)})</option>)}</select>
                 </div>
               </div>
             )}
@@ -610,7 +623,7 @@ export function ProblemForm({ initial }: { initial?: ProblemFormInitial }) {
               <div className="mt-3">
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-bold">{title.trim() || "Untitled test"}</p>
-                  {pricing === "paid" && <span className="shrink-0 rounded-md bg-[#dcfce7] px-2 py-0.5 text-sm font-bold text-[#16a34a]">{Number(price) || 0}৳</span>}
+                  {pricing === "paid" && <span className="shrink-0 rounded-md bg-[#dcfce7] px-2 py-0.5 text-sm font-bold text-[#16a34a]">{currencySymbol(currency || 'USD')}{Number(price) || 0}</span>}
                 </div>
                 <p className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[13px] text-muted">
                   <span>🏆 {totalMarks || "—"} Marks</span>
@@ -633,7 +646,7 @@ export function ProblemForm({ initial }: { initial?: ProblemFormInitial }) {
               <div className="mt-3">
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-bold">{title.trim() || "Untitled test"}</p>
-                  {pricing === "paid" && <span className="shrink-0 rounded-md bg-[#dcfce7] px-2 py-0.5 text-sm font-bold text-[#16a34a]">{Number(price) || 0}৳</span>}
+                  {pricing === "paid" && <span className="shrink-0 rounded-md bg-[#dcfce7] px-2 py-0.5 text-sm font-bold text-[#16a34a]">{currencySymbol(currency || 'USD')}{Number(price) || 0}</span>}
                 </div>
                 <p className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[13px] text-muted">
                   <span>☰ {itemCount} Problem List{itemCount === 1 ? "" : "s"}</span>
@@ -694,7 +707,7 @@ export function ProblemForm({ initial }: { initial?: ProblemFormInitial }) {
               {[
                 ["Total Marks", totalMarks || "—"],
                 ["Passing Marks", `${passingMarks || "—"} (${passPct}%)`],
-                ["Price", pricing === "paid" ? `${Number(price) || 0} ${currency || "BDT"}` : "Free"],
+                ["Price", pricing === "paid" ? `${Number(price) || 0} ${currency || defaultCurrency}` : "Free"],
                 ["Deadline", deadline ? fmtDeadline(deadline) : "—"],
                 ["Number of Problems", String(itemCount)],
               ].map(([k, v]) => (

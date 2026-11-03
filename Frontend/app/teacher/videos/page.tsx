@@ -3,7 +3,9 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Empty, ErrorBox, Loading } from "@/components/ui";
+import { useDialog } from "@/components/AlertDialog";
 import { useToast } from "@/components/ui";
+import { DataList, DataRow, RowChip } from "@/components/DataList";
 import { apiDelete, apiGet, apiPatch, ApiError, qs } from "@/lib/api";
 import { useFetch } from "@/lib/hooks";
 import { idOf, type Page, type Playlist, type Video } from "@/lib/types";
@@ -30,6 +32,7 @@ function Thumb({ video }: { video: Video }) {
 
 function RowMenu({ video, onDone }: { video: Video; onDone: () => void }) {
   const toast = useToast();
+  const { confirm } = useDialog();
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top?: number; bottom?: number; right: number } | null>(null);
   const busy = false;
@@ -42,11 +45,11 @@ function RowMenu({ video, onDone }: { video: Video; onDone: () => void }) {
         return;
       }
       if (action === "soft") {
-        if (!window.confirm(`Delete "${video.title}"? It will be hidden from students. You can re-publish it later.`)) return;
+        if (!(await confirm({ title: `Delete "${video.title}"?`, message: "It will be hidden from students. You can re-publish it later.", confirmLabel: "Delete", danger: true }))) return;
         await apiDelete(`/api/v1/videos/${idOf(video)}`);
         toast("Video deleted.");
       } else if (action === "hard") {
-        if (!window.confirm(`Permanently delete "${video.title}"? This removes the video, its uploaded file, and its playlist entries. This cannot be undone.`)) return;
+        if (!(await confirm({ title: `Permanently delete "${video.title}"?`, message: "This removes the video, its uploaded file, and its playlist entries. This cannot be undone.", confirmLabel: "Delete permanently", danger: true }))) return;
         await apiDelete(`/api/v1/videos/${idOf(video)}?hard=true`);
         toast("Video permanently deleted.");
       } else {
@@ -188,39 +191,22 @@ export default function TeacherVideosPage() {
           : videos.error ? <div className="p-6"><ErrorBox message={videos.error} onRetry={videos.retry} /></div>
           : !rows.length ? <div className="p-6"><Empty title={tab === "all" ? "No videos yet" : `No ${tab} videos`} body={debounced ? "Nothing matches this search." : "Upload your first video to start teaching."} action={<Link href="/teacher/videos/new" className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white">Upload Video</Link>} /></div>
           : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[820px] text-left">
-                <thead>
-                  <tr className="text-[15px] text-muted">
-                    <th className="px-6 py-4 font-medium">Video</th>
-                    <th className="px-4 py-4 font-medium">Playlist</th>
-                    <th className="px-4 py-4 font-medium">Duration</th>
-                    <th className="px-4 py-4 font-medium">Status</th>
-                    <th className="px-6 py-4 text-right font-medium">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {pageRows.map((v, i) => (
-                    <tr key={idOf(v)} className="align-middle">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-4">
-                          <Thumb video={v} />
-                          <span className="text-[15px] font-medium">{(page - 1) * PAGE_SIZE + i + 1}. {v.title}</span>
-                        </div>
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-4 text-[15px] text-muted">{playlistOf.get(idOf(v)) ?? "—"}</td>
-                      <td className="whitespace-nowrap px-4 py-4 text-[15px] text-muted">—</td>
-                      <td className="px-4 py-4">
-                        <span className={`inline-flex items-center rounded-lg px-4 py-1.5 text-sm font-semibold ${v.status === "published" ? "bg-[#e6f9ec] text-[#16a34a]" : v.status === "draft" ? "bg-[#eef1f6] text-muted dark:bg-soft" : "bg-[#fef3e2] text-[#b45309]"}`}>
-                          {v.status === "published" ? "Published" : v.status === "draft" ? "Draft" : v.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right"><RowMenu video={v} onDone={videos.retry} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataList label="Videos">
+              {pageRows.map((v, i) => (
+                <DataRow
+                  key={idOf(v)}
+                  icon={<Thumb video={v} />}
+                  title={`${(page - 1) * PAGE_SIZE + i + 1}. ${v.title}`}
+                  meta={playlistOf.get(idOf(v)) ?? "No playlist"}
+                  chip={
+                    <RowChip tone={v.status === "published" ? "bg-[#e6f9ec] text-[#16a34a]" : v.status === "draft" ? "bg-[#eef1f6] text-muted dark:bg-soft" : "bg-[#fef3e2] text-[#b45309]"}>
+                      {v.status === "published" ? "Published" : v.status === "draft" ? "Draft" : v.status}
+                    </RowChip>
+                  }
+                  actions={<RowMenu video={v} onDone={videos.retry} />}
+                />
+              ))}
+            </DataList>
           )}
       </div>
 

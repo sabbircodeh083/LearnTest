@@ -6,6 +6,7 @@ import { DiscoverVideos, ModeToggle, PlaylistSlider, PracticeTests, useTeacherPr
 import { apiGet, qs } from "@/lib/api";
 import { useFetch } from "@/lib/hooks";
 import type { Exam, Page, Video } from "@/lib/types";
+import { priceLabel } from "@/lib/types";
 
 export default function HomePage() {
   const [mode, setMode] = useState<DiscoverMode>("videos");
@@ -76,7 +77,7 @@ export default function HomePage() {
                         <span className="block truncate text-[13px] font-bold">{t.title}</span>
                       </span>
                       <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-bold ${(t.price ?? 0) > 0 ? "bg-[#ffedd5] text-[#c2410c]" : "bg-[#dcfce7] text-[#16a34a]"}`}>
-                        {(t.price ?? 0) > 0 ? `৳ ${t.price}` : "Free"}
+                        {priceLabel(t.price, t.currency)}
                       </span>
                       <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4 shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="m9 6 6 6-6 6" /></svg>
                     </Link>

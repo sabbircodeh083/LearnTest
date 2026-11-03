@@ -3,7 +3,9 @@ import { Suspense, use, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Badge, Btn, Empty, ErrorBox, Loading, statusTone, useToast } from "@/components/ui";
+import { useDialog } from "@/components/AlertDialog";
 import { apiGet, apiPatch, ApiError } from "@/lib/api";
+import { safeExternalUrl } from "@/lib/url";
 import { useFetch } from "@/lib/hooks";
 import { fmtDate } from "@/lib/types";
 
@@ -61,6 +63,7 @@ export default function AdminUserProfilePage({ params }: { params: Promise<{ use
 function AdminUserProfileInner({ params }: { params: Promise<{ userId: string }> }) {
   const { userId } = use(params);
   const toast = useToast();
+  const { promptReason } = useDialog();
   const [tab, setTab] = useState<Tab>("overview");
   const search = useSearchParams();
   const fromReports = search.get("from") === "reports";
@@ -73,16 +76,16 @@ function AdminUserProfileInner({ params }: { params: Promise<{ userId: string }>
 
   const changeRole = async () => {
     const next = u.role === "student" ? "teacher" : "student";
-    const reason = window.prompt(`Change ${u.email} to ${next}? Reason required.`);
-    if (!reason || reason.trim().length < 3) { if (reason !== null) toast("Reason required (min 3 characters).", "err"); return; }
-    try { await apiPatch(`/api/v1/admin/users/${u.userId}/role`, { role: next, reason: reason.trim() }); toast("Role updated."); retry(); }
+    const reason = await promptReason({ title: `Change ${u.email} to ${next}?`, label: "Reason (required, at least 3 characters)", confirmLabel: "Change role" });
+    if (!reason) return;
+    try { await apiPatch(`/api/v1/admin/users/${u.userId}/role`, { role: next, reason }); toast("Role updated."); retry(); }
     catch (e) { toast(e instanceof ApiError ? e.message : "Role change failed.", "err"); }
   };
   const toggleStatus = async () => {
     const next = u.status === "active" ? "suspended" : "active";
-    const reason = window.prompt(`${next === "suspended" ? "Suspend" : "Reactivate"} ${u.email}? Reason required.`);
-    if (!reason || reason.trim().length < 3) { if (reason !== null) toast("Reason required (min 3 characters).", "err"); return; }
-    try { await apiPatch(`/api/v1/admin/users/${u.userId}/status`, { status: next, reason: reason.trim() }); toast("Status updated."); retry(); }
+    const reason = await promptReason({ title: `${next === "suspended" ? "Suspend" : "Reactivate"} ${u.email}?`, label: "Reason (required, at least 3 characters)", confirmLabel: next === "suspended" ? "Suspend" : "Reactivate", danger: next === "suspended" });
+    if (!reason) return;
+    try { await apiPatch(`/api/v1/admin/users/${u.userId}/status`, { status: next, reason }); toast("Status updated."); retry(); }
     catch (e) { toast(e instanceof ApiError ? e.message : "Status change failed.", "err"); }
   };
 
@@ -96,7 +99,7 @@ function AdminUserProfileInner({ params }: { params: Promise<{ userId: string }>
     { key: "linkedin", label: "LinkedIn", badge: "bg-[#0a66c2] text-white", mark: "in", href: u.socials?.linkedin ?? "" },
     { key: "dev", label: "DEV", badge: "bg-black text-white", mark: "DEV", href: u.socials?.dev ?? "" },
     { key: "website", label: "Website", badge: "bg-[#1d6ce0] text-white", mark: "✦", href: u.socials?.website ?? "" },
-  ].filter((l) => l.href.trim());
+  ].filter((l) => safeExternalUrl(l.href));
 
   const reviewsBody = stats.ratingCount > 0 ? (
     <div className="mt-2 rounded-xl bg-soft p-5 text-center">
@@ -215,7 +218,7 @@ function AdminUserProfileInner({ params }: { params: Promise<{ userId: string }>
               {socials.length ? (
                 <p className="mt-3 flex flex-wrap gap-2">
                   {socials.map((l) => (
-                    <a key={l.key} href={l.href} target="_blank" rel="noreferrer" title={l.label} aria-label={l.label}
+                    <a key={l.key} href={safeExternalUrl(l.href) ?? "#"} target="_blank" rel="noreferrer" title={l.label} aria-label={l.label}
                       className={`flex h-9 w-11 items-center justify-center rounded-lg text-[11px] font-black ${l.badge}`}>{l.mark}</a>
                   ))}
                 </p>

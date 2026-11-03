@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { safeExternalUrl } from "@/lib/url";
 import { apiBlobUrl } from "@/lib/api";
 
 export function initialsOf(name: string) {
@@ -81,16 +82,18 @@ export function SocialTile({ tile, href, size = "md" }: {
       {tile.mark}
     </span>
   );
-  if (!href) return <span title={tile.label}>{inner}</span>;
+  const safeHref = safeExternalUrl(href);
+  if (!safeHref) return <span title={tile.label}>{inner}</span>;
   return (
-    <a href={href} target="_blank" rel="noreferrer" title={`${tile.label}: ${href}`} aria-label={`${tile.label} profile`}>
+    <a href={safeHref} target="_blank" rel="noreferrer" title={`${tile.label}: ${href}`} aria-label={`${tile.label} profile`}>
       {inner}
     </a>
   );
 }
 
-export function handleOf(user: { username?: string; email: string }) {
-  return user.username ? `@${user.username}` : `@${user.email.split("@")[0]}`;
+export function handleOf(user: { username?: string; email?: string }) {
+  if (user.username) return `@${user.username}`;
+  return user.email ? `@${user.email.split("@")[0]}` : "@teacher";
 }
 
 export const cameraIcon = (

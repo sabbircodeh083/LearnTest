@@ -32,7 +32,7 @@ DELETE /api/v1/videos/:id        🔒  (soft delete → hidden)
 POST body:
 
 ```json
-{ "title": "Intro", "description": "", "tags": [], "visibility": "public|private|unlisted", "status": "draft|published", "price": 0, "currency": "BDT", "sourceType": "youtube|upload", "youtubeId": "", "assetUploadId": null }
+{ "title": "Intro", "description": "", "tags": [], "visibility": "public|private|unlisted", "status": "draft|published", "price": 0, "currency": "USD", "sourceType": "youtube|upload", "youtubeId": "", "assetUploadId": null }
 ```
 
 ## Playlists — same pattern as videos `🔒` writes need teacher/admin
@@ -58,7 +58,7 @@ DELETE /api/v1/questions/:id     🔒
 ## Exams & attempts
 
 ```http
-GET   /api/v1/my-tests?page=1&limit=20&type=quiz|written|problem|project&tab=all|published|drafts|archived   🔒 teacher  Unified list: exams merged with legacy assignments (assignments report source="assignment", kind="project")
+GET   /api/v1/my-tests?page=1&limit=20&type=quiz|written|problem|project&tab=all|published|drafts|archived   🔒 teacher  Unified list of all own tests by kind/status
 GET   /api/v1/exams?page=1&limit=20
 GET   /api/v1/exams/:id
 GET   /api/v1/exams/:id/preview            Student-safe preview (item details only when free/entitled/owner)
@@ -73,29 +73,23 @@ GET   /api/v1/exam-attempts/:id             🔒 (score hidden from student unti
 PATCH /api/v1/exam-attempts/:id/grade       🔒 teacher (exam owner)  Body: { "score": 85, "feedback": "..." }
 ```
 
-## Assignments & submissions
+## Project & written submissions (via exams)
+
+Assignments were unified into project-type exams. Students submit through exam attempts; teachers grade through the queue below.
 
 ```http
-POST  /api/v1/assignments                  🔒 teacher  Body: base fields + { "dueAt": "2026-02-01T00:00:00Z"?, "maxScore": 100 }
-GET   /api/v1/assignments?page=1&limit=20&mine=1
-GET   /api/v1/assignments/:id
-POST  /api/v1/submissions                  🔒 student  Body: { "assignmentId": "<id>", "uploadId"?: "<uploadId>", "repoUrl"?: "https://...", "liveUrl"?: "https://..." }
-GET   /api/v1/submissions/me?page=1&limit=20        🔒 student
-GET   /api/v1/submissions/:id              🔒 (grade hidden from student until graded)
-GET   /api/v1/assignments/:id/submissions?page=1&limit=20  🔒 teacher (assignment owner)
-PATCH /api/v1/submissions/:id/grade        🔒 teacher (assignment owner)  Body: { "grade": 90, "feedback": "..." }
-GET   /api/v1/submission-queue/items?state=pending|graded&type=written|project   🔒 teacher  Grading queue: latest submission per student per written/project test (exams + legacy assignments)
+GET   /api/v1/submission-queue/items?state=pending|graded&type=written|project   🔒 teacher  Grading queue: latest attempt per student per written/project test
+PATCH /api/v1/exam-attempts/:id/grade       🔒 teacher (exam owner)  Body: { "score": 85, "feedback": "..." } or itemized { "breakdown": [...] }
 ```
 
 ## Comments / reactions / ratings / follows / reports `🔒`
 
 ```http
 GET    /api/v1/comments?targetType=video&targetId=<id>&page=1&limit=20
-POST   /api/v1/comments           Body: { "targetType": "video|playlist|question|exam|assignment", "targetId": "<id>", "content": "..." }
-DELETE /api/v1/comments/:id       (own comment)
+POST   /api/v1/comments           Body: { "targetType": "video|playlist|question|exam", "targetId": "<id>", "content": "..." }
 POST   /api/v1/reactions          Body: { "targetType": "...", "targetId": "<id>", "value": "like|dislike" }  (same value again removes it; other value switches)
 GET    /api/v1/reactions/summary?targetType=...&targetId=...
-POST   /api/v1/ratings            Body: { "targetType": "video|playlist|question|exam|assignment|teacher", "targetId": "<id>", "value": 1-5 }
+POST   /api/v1/ratings            Body: { "targetType": "video|playlist|question|exam|teacher", "targetId": "<id>", "value": 1-5 }
 GET    /api/v1/ratings/summary?targetType=...&targetIds=id1,id2
 POST   /api/v1/follows            Body: { "teacherId": "<userId>" }
 DELETE /api/v1/follows/:id
@@ -114,22 +108,21 @@ POST   /api/v1/reports            Body: { "targetType": "...", "targetId": "<id>
 
 ## Uploads — multipart file, Bouncer-scanned before download `🔒`
 
-Send as `multipart/form-data` with field name `file` (PDF/ZIP for assignments; PDF/MP4/PNG/JPG/WEBP for content; PNG/JPG/WEBP for avatars; max 10 MB default):
+Send as `multipart/form-data` with field name `file` (PDF/ZIP for test submissions; PDF/MP4/PNG/JPG/WEBP for content; PNG/JPG/WEBP for avatars/covers; max 10 MB default):
 
 ```http
-POST /api/v1/uploads/assignment   🔒 student  Extra fields: relatedId=<assignmentId>
+POST /api/v1/uploads/assignment   🔒 student  Test-file upload. Extra fields: relatedId=<attemptId>
 POST /api/v1/uploads/content      🔒 teacher
 POST /api/v1/uploads/avatar       🔒 any verified user
 POST /api/v1/uploads/cover        🔒 any verified user
 GET  /api/v1/uploads/:id          🔒  Metadata incl. scanStatus (pending_scan → clean | suspicious | infected | scan_failed)
 GET  /api/v1/uploads/:id/download 🔒  File bytes — only when scan is clean (403 otherwise)
-POST /api/v1/uploads/:id/rescan   🔒  Retry a failed/pending scan (owner or admin)
 ```
 
 ## Payments (SSLCOMMERZ) / purchases / entitlements
 
 ```http
-POST /api/v1/payments/sslcommerz/initiate   🔒  Body: { "contentType": "video|playlist|question|exam|assignment", "contentId": "<id>" } → { purchaseId, tranId, gatewayUrl }
+POST /api/v1/payments/sslcommerz/initiate   🔒  Body: { "contentType": "video|playlist|question|exam", "contentId": "<id>" } → { purchaseId, tranId, gatewayUrl }
 POST /api/v1/payments/sslcommerz/ipn        Provider callback (validates server-to-server; only this grants access)
 POST /api/v1/payments/sslcommerz/success    Browser return → redirects to frontend result page
 POST /api/v1/payments/sslcommerz/fail       Browser return → redirects to frontend result page
@@ -138,7 +131,6 @@ GET  /api/v1/purchases/me                   🔒  My last 100 purchases
 GET  /api/v1/purchases/statement?page=1&limit=20&search=text&type=video|playlist|quiz|written|problem|project   🔒  Own statements with content title + teacher
 GET  /api/v1/purchases/sales/me?page=1&limit=20   🔒 teacher  Purchases of own content with buyer + content title
 GET  /api/v1/purchases/payouts/me           🔒 teacher  Earned / paid-out / due + payout history
-GET  /api/v1/purchases/:purchaseId          🔒  (owner or admin)
 GET  /api/v1/entitlements/:contentType/:contentId   🔒  → { entitled: true|false }
 ```
 
@@ -158,11 +150,8 @@ GET   /api/v1/admin/purchases/:purchaseId
 GET   /api/v1/admin/payouts
 GET   /api/v1/admin/payouts/:teacherId
 POST  /api/v1/admin/payouts/:teacherId   Body: { "amount": 1000, "note": "..." }  (cannot exceed due payout)
-POST  /api/v1/admin/entitlements/:entitlementId/revoke    Body: { "reason": "..." }
-POST  /api/v1/admin/entitlements/:entitlementId/restore   Body: { "reason": "..." }
 GET   /api/v1/admin/analytics?from=2026-01-01T00:00:00Z&to=2026-01-31T00:00:00Z   (max 366 days)
 GET   /api/v1/admin/audit-logs?page=1&limit=20&actorId=...&action=...
-GET   /api/v1/admin/health
 ```
 
 ## Docs

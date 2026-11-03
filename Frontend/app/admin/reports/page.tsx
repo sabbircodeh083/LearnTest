@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { Badge, Btn, Empty, ErrorBox, Loading, PageHead, useToast } from "@/components/ui";
+import { useDialog } from "@/components/AlertDialog";
 import { apiGet, apiPatch, ApiError, qs } from "@/lib/api";
 import { useFetch } from "@/lib/hooks";
 import { fmtDate, type Page } from "@/lib/types";
@@ -11,11 +12,12 @@ const isUserTarget = (t: string) => t === "teacher" || t === "user";
 
 export default function AdminReportsPage() {
   const toast = useToast();
+  const { promptReason } = useDialog();
   const { data, error, loading, retry } = useFetch(() => apiGet<Page<ReportDoc>>(`/api/v1/admin/content/reports${qs({ limit: 30 })}`), []);
   const moderate = async (r: ReportDoc, action: "hide" | "restore" | "reject") => {
-    const reason = window.prompt(`Reason for “${action}” on this ${r.targetType}? (required)`);
-    if (!reason || reason.trim().length < 3) { if (reason !== null) toast("A reason of at least 3 characters is required.", "err"); return; }
-    try { await apiPatch(`/api/v1/admin/content/${r.targetType}/${r.targetId}/moderation`, { action, reason: reason.trim() }); toast("Moderation saved."); retry(); }
+    const reason = await promptReason({ title: `${action.charAt(0).toUpperCase()}${action.slice(1)} this ${r.targetType}?`, label: "Reason (required, at least 3 characters)", confirmLabel: "Save moderation", danger: action !== "restore" });
+    if (!reason) return;
+    try { await apiPatch(`/api/v1/admin/content/${r.targetType}/${r.targetId}/moderation`, { action, reason }); toast("Moderation saved."); retry(); }
     catch (e) { toast(e instanceof ApiError ? e.message : "Moderation failed.", "err"); }
   };
   return (

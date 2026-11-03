@@ -3,16 +3,21 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AuthCard } from "@/components/AuthCard";
+import { FormSkeleton } from "@/components/Skeleton";
 import { Btn, Field, inputCls, Notice } from "@/components/ui";
 import { apiPost, ApiError, API_BASE } from "@/lib/api";
-import { useAuth, roleHome } from "@/lib/auth";
+import { useAuth, roleHome, useRedirectIfSignedIn } from "@/lib/auth";
+import { safeExternalUrl, safeReturnTo } from "@/lib/url";
+import { checkEmail } from "@/lib/validation";
 
 function SignInForm() {
   const router = useRouter();
   const search = useSearchParams();
   const rawReturn = search.get("returnTo");
-  const returnTo = rawReturn && /^\/(?!\/)/.test(rawReturn) ? rawReturn : null;
+  const returnTo = safeReturnTo(rawReturn) || null;
   const { refresh } = useAuth();
+  // Signed-in users cannot stay on this page — sent to their workspace.
+  const { user, loading: authLoading } = useRedirectIfSignedIn(returnTo);
   const [form, setForm] = useState({ email: "", password: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState("");
@@ -32,8 +37,9 @@ function SignInForm() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const errs: Record<string, string> = {};
-    if (!/^\S+@\S+\.\S+$/.test(form.email)) errs.email = "Enter a valid email address.";
-    if (!form.password) errs.password = "Enter your password.";
+    const emailErr = checkEmail(form.email); if (emailErr) errs.email = emailErr;
+    if (!form.password) errs.password = "Password is required.";
+    else if (!form.password.trim()) errs.password = "Password cannot be only spaces — enter your password.";
     setErrors(errs);
     if (Object.keys(errs).length) return;
     setBusy(true); setServerError("");
@@ -53,7 +59,7 @@ function SignInForm() {
   };
 
   const resend = async () => {
-    if (!/^\S+@\S+\.\S+$/.test(form.email)) { setErrors({ email: "Enter your email first, then resend the link." }); return; }
+    if (checkEmail(form.email)) { setErrors({ email: "Enter a valid email first, then resend the link." }); return; }
     setResending(true); setResent(false);
     try {
       await apiPost("/api/auth/send-verification-email", {
@@ -67,7 +73,7 @@ function SignInForm() {
   };
 
   const forgot = async () => {
-    if (!/^\S+@\S+\.\S+$/.test(form.email)) { setErrors({ email: "Enter your email first, then choose Forgot password." }); return; }
+    if (checkEmail(form.email)) { setErrors({ email: "Enter a valid email first, then choose Forgot password." }); return; }
     try {
       await apiPost("/api/auth/forget-password", { email: form.email.trim(), redirectTo: `${window.location.origin}/sign-in` });
       setResetSent(true);
@@ -79,12 +85,22 @@ function SignInForm() {
       const data = await apiPost<{ url?: string }>("/api/auth/sign-in/social", {
         provider, callbackURL: `${window.location.origin}/select-role`,
       });
-      if (data?.url) window.location.href = data.url;
+      if (data?.url && safeExternalUrl(data.url)) window.location.href = data.url;
       else window.location.href = `${API_BASE}/api/auth/sign-in/${provider}`;
     } catch {
       window.location.href = `${API_BASE}/api/auth/sign-in/${provider}`;
     }
   };
+
+  // While the session is being checked — and once we know the visitor is
+  // signed in (redirect in flight) — never render the form.
+  if (authLoading || user) {
+    return (
+      <AuthCard title="Welcome back" sub="Sign in with the email you registered with.">
+        <FormSkeleton fields={2} label="Checking your session…" />
+      </AuthCard>
+    );
+  }
 
   return (
     <AuthCard title="Welcome back" sub="Sign in with the email you registered with.">
@@ -102,10 +118,10 @@ function SignInForm() {
         )}
         {resetSent && <Notice tone="blue">If that email has an account, a password-reset link is on its way.</Notice>}
         <Field label="Email" error={errors.email}>
-          <input className={inputCls} type="email" autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="you@example.com" />
+          <input className={inputCls} type="email" autoComplete="email" value={form.email} onChange={(e) => { setForm({ ...form, email: e.target.value }); setErrors((p) => ({ ...p, email: "" })); }} placeholder="you@example.com" />
         </Field>
         <Field label="Password" error={errors.password}>
-          <input className={inputCls} type="password" autoComplete="current-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Your password" />
+          <input className={inputCls} type="password" autoComplete="current-password" value={form.password} onChange={(e) => { setForm({ ...form, password: e.target.value }); setErrors((p) => ({ ...p, password: "" })); }} placeholder="Your password" />
         </Field>
         <div className="text-right">
           <button type="button" onClick={forgot} className="text-sm font-semibold text-brandstrong">Forgot password?</button>
@@ -124,7 +140,7 @@ function SignInForm() {
 
 export default function SignInPage() {
   return (
-    <Suspense fallback={<AuthCard title="Welcome back" sub="Sign in with the email you registered with."><p className="text-sm text-muted">Loading…</p></AuthCard>}>
+    <Suspense fallback={<AuthCard title="Welcome back" sub="Sign in with the email you registered with."><FormSkeleton fields={2} label="Loading sign-in…" /></AuthCard>}>
       <SignInForm />
     </Suspense>
   );

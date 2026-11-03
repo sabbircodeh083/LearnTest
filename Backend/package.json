@@ -55,5 +55,8 @@
     "typescript-eslint": "^8.72.1",
     "vitest": "^5.0.5"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "minimatch": "^11.0.4"
+  }
 }

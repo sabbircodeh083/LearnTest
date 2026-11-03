@@ -5,6 +5,7 @@ import { AvatarImg } from "@/components/profile";
 import { Empty, ErrorBox, Loading, useToast } from "@/components/ui";
 import { apiGet, ApiError, qs } from "@/lib/api";
 import { fmtDate } from "@/lib/types";
+import { DataList, DataRow, RowIcon } from "@/components/DataList";
 
 const PAGE_SIZE = 20;
 type StatusKey = "" | "published" | "draft";
@@ -13,7 +14,7 @@ type DateKey = "all" | "today" | "last7" | "last30";
 
 export interface QueueSubmission {
   id: string;
-  source: "exam" | "assignment";
+  source: "exam";
   testId: string;
   testTitle: string;
   kind: "written" | "project";
@@ -54,9 +55,7 @@ function toneOf(seed: string) {
 const inputCls = "rounded-lg border border-line bg-card px-3.5 py-2.5 text-sm text-ink placeholder:text-muted/70 shadow-[0_1px_3px_rgba(16,24,40,0.10)] outline-none focus:border-line focus:shadow-[0_2px_8px_rgba(16,24,40,0.12)]";
 const feedbackHref = (s: QueueSubmission, state: "pending" | "graded") => {
   const from = state === "graded" ? "archive" : "submissions";
-  return s.source === "exam"
-    ? `/teacher/feedback/${s.testId}?source=exam&attempt=${s.id}&from=${from}`
-    : `/teacher/feedback/${s.testId}?source=assignment&submission=${s.id}&from=${from}`;
+  return `/teacher/feedback/${s.testId}?attempt=${s.id}&from=${from}`;
 };
 
 export default function SubmissionQueue({ state, title, sub, emptyTitle, emptyBody }: {
@@ -173,66 +172,41 @@ export default function SubmissionQueue({ state, title, sub, emptyTitle, emptyBo
             : !items.length ? <Empty title={emptyTitle} body={emptyBody} />
             : (
               <>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[900px] text-left text-sm">
-                    <thead>
-                      <tr className="text-[13px] text-muted">
-                        <th className="rounded-l-lg bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">#</th>
-                        <th className="bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Student</th>
-                        <th className="bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Test</th>
-                        <th className="bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Type</th>
-                        <th className="bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Submitted</th>
-                        <th className="rounded-r-lg bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-line">
-                      {items.map((s, i) => {
-                        const meta = KIND_META[s.kind] ?? KIND_META.written!;
-                        return (
-                          <tr key={`${s.source}-${s.id}`} className="align-middle">
-                            <td className="px-4 py-4 text-muted">{i + 1}</td>
-                            <td className="px-4 py-4">
-                              <div className="flex items-center gap-3">
-                                <span aria-hidden className={`flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full text-[13px] font-bold ${toneOf(s.student.userId)}`}>
-                                  {s.student.avatarUploadId ? (
-                                    <AvatarImg uploadId={s.student.avatarUploadId} name={s.student.name} className="h-full w-full" />
-                                  ) : (
-                                    initialsOf(s.student.name)
-                                  )}
-                                </span>
-                                <span>
-                                  <span className="block font-semibold leading-tight">{s.student.name}</span>
-                                  <span className="block max-w-[220px] truncate text-[13px] text-muted">{s.student.email || `id ${s.student.userId.slice(0, 8)}…`}</span>
-                                </span>
-                              </div>
-                            </td>
-                            <td className="max-w-[260px] px-4 py-4">
-                              <p className="truncate font-bold">{s.testTitle}</p>
-                              <p className="mt-0.5 text-xs text-muted">
-                                {s.source === "exam" && s.attemptNumber != null ? `Attempt #${s.attemptNumber}` : "Project submission"}
-                                {s.score != null && state === "graded" ? ` · Score ${s.score}` : ""}
-                              </p>
-                            </td>
-                            <td className="whitespace-nowrap px-4 py-4">
-                              <span className={`inline-flex items-center gap-2 font-medium ${meta.cls}`}>
-                                <span aria-hidden className={`flex h-8 w-8 items-center justify-center rounded-lg ${meta.box}`}>{meta.icon}</span>
-                                {meta.label}
-                              </span>
-                            </td>
-                            <td className="whitespace-nowrap px-4 py-4 text-muted">{s.submittedAt ? fmtDate(s.submittedAt) : "—"}</td>
-                            <td className="whitespace-nowrap px-4 py-4">
-                              <Link href={feedbackHref(s, state)}
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-3.5 py-2 text-[13px] font-semibold text-[#1d6ce0] hover:bg-[#eff6ff]">
-                                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></svg>
-                                {state === "graded" ? "View Feedback" : "Give Feedback"}
-                              </Link>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                <DataList label={title}>
+                  {items.map((s) => {
+                    const meta = KIND_META[s.kind] ?? KIND_META.written!;
+                    return (
+                      <DataRow
+                        key={`${s.source}-${s.id}`}
+                        icon={
+                          <RowIcon tone={toneOf(s.student.userId)} shape="rounded-full" size="h-9 w-9">
+                            {s.student.avatarUploadId ? (
+                              <AvatarImg uploadId={s.student.avatarUploadId} name={s.student.name} className="h-full w-full" />
+                            ) : (
+                              <span className="text-[13px] font-bold">{initialsOf(s.student.name)}</span>
+                            )}
+                          </RowIcon>
+                        }
+                        title={s.student.name}
+                        meta={<>{s.student.email || `id ${s.student.userId.slice(0, 8)}…`} · Submitted {s.submittedAt ? fmtDate(s.submittedAt) : "—"}</>}
+                        detail={`${s.testTitle} · ${s.source === "exam" && s.attemptNumber != null ? `Attempt #${s.attemptNumber}` : "Project submission"}${s.score != null && state === "graded" ? ` · Score ${s.score}` : ""}`}
+                        chip={
+                          <span className={`inline-flex items-center gap-2 font-medium ${meta.cls}`}>
+                            <span aria-hidden className={`flex h-8 w-8 items-center justify-center rounded-lg ${meta.box}`}>{meta.icon}</span>
+                            {meta.label}
+                          </span>
+                        }
+                        actions={
+                          <Link href={feedbackHref(s, state)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-3.5 py-2 text-[13px] font-semibold text-[#1d6ce0] hover:bg-[#eff6ff]">
+                            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></svg>
+                            {state === "graded" ? "View Feedback" : "Give Feedback"}
+                          </Link>
+                        }
+                      />
+                    );
+                  })}
+                </DataList>
 
                 {/* footer */}
                 <div className="mt-4 rounded-xl border border-line bg-card px-4 py-4 text-center">

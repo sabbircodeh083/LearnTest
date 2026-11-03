@@ -4,13 +4,12 @@ import { asyncHandler, ok, q, validate } from "../common/middleware.js";
 import { pagination, paginate } from "../common/schemas.js";
 import { forbidden, notFound, badRequest } from "../common/errors.js";
 import { requireAdmin } from "../auth/guards.js";
-import { AuditLog, Assignment, Comment, Entitlement, Exam, Follow, Payout, Playlist, Profile, Purchase, Question, Rating, Report, Submission, Video } from "../models/index.js";
+import { AuditLog, Comment, Entitlement, Exam, ExamAttempt, Follow, Payout, Playlist, Profile, Purchase, Question, Rating, Report, Video } from "../models/index.js";
 import { audit } from "../services/audit.js";
-import { isDbReady } from "../config/database.js";
 import { findUserByUserId, listUserIdsByRole, normalizeRole, roleMapForUserIds } from "../services/user-roles.js";
 
 const reason = z.string().min(3, "Reason required").max(500);
-const CONTENT_MODELS: Record<string, any> = { video: Video, playlist: Playlist, question: Question, exam: Exam, assignment: Assignment, comment: Comment };
+const CONTENT_MODELS: Record<string, any> = { video: Video, playlist: Playlist, question: Question, exam: Exam, comment: Comment };
 
 export function adminRouter(deps: { requireAuth: any; verified: any[]; authDb?: () => any }) {
   const r = Router(); const { requireAuth, verified } = deps;
@@ -29,7 +28,7 @@ export function adminRouter(deps: { requireAuth: any; verified: any[]; authDb?: 
     const [videos, playlists, questions, exams, pendingPayments, paidPayments, failedPayments, pendingSubs] = await Promise.all([
       Video.countDocuments({ status: "published" }), Playlist.countDocuments({ status: "published" }), Question.countDocuments({ status: "published" }),
       Exam.countDocuments(), Purchase.countDocuments({ status: "pending" }), Purchase.countDocuments({ status: "paid" }),
-      Purchase.countDocuments({ status: "failed" }), Submission.countDocuments({ state: "submitted" }),
+      Purchase.countDocuments({ status: "failed" }), ExamAttempt.countDocuments({ state: "submitted" }),
     ]);
     ok(res, { users, students, teachers, published: { videos, playlists, questions }, exams, payments: { pending: pendingPayments, paid: paidPayments, failed: failedPayments }, pendingSubmissions: pendingSubs, pendingPayouts: await countTeachersWithDue() });
   }));
@@ -157,10 +156,9 @@ export function adminRouter(deps: { requireAuth: any; verified: any[]; authDb?: 
     void role; // legacy profile.role is never trusted
     const u = target ?? { role: undefined, roleSelected: (doc as any).roleSelected };
     const uid = String((doc as any).userId ?? req.params.userId);
-    const [publishedVideos, examCount, assignmentCount, followers, ratingAgg] = await Promise.all([
+    const [publishedVideos, examCount, followers, ratingAgg] = await Promise.all([
       Video.countDocuments({ ownerId: uid, status: "published" }).catch(() => 0),
       Exam.countDocuments({ ownerId: uid }).catch(() => 0),
-      Assignment.countDocuments({ ownerId: uid }).catch(() => 0),
       Follow.countDocuments({ teacherId: uid }).catch(() => 0),
       Rating.aggregate([
         { $match: { targetType: "teacher", targetId: uid } },
@@ -178,7 +176,7 @@ export function adminRouter(deps: { requireAuth: any; verified: any[]; authDb?: 
       roleSelected: Boolean((u as any)?.roleSelected ?? (doc as any).roleSelected),
       stats: {
         publishedVideos,
-        createdTests: examCount + assignmentCount,
+        createdTests: examCount,
         followers,
         averageRating: rating ? Math.round(Number(rating.avg) * 10) / 10 : null,
         ratingCount: rating ? Number(rating.count) : 0,
@@ -298,11 +296,39 @@ export function adminRouter(deps: { requireAuth: any; verified: any[]; authDb?: 
     };
     ok(res, { purchase: doc, entitlement, content }); // verified gateway fields only; admins cannot rewrite them here
   }));
+  // Manual repair for a gateway-VALID order stuck in pending (e.g. the
+  // pre-fix USD→BDT conversion bug where `amount` held BDT settlement while
+  // the order held USD). Admin-only, audited, idempotent: flips a
+  // pending/risk_hold order to paid and grants the entitlement once. This is
+  // what unlocks the student's video. The teacher's money stays "pending"
+  // (due payout) until a manual payout is recorded via POST /payouts/:teacherId.
+  r.post("/purchases/:purchaseId/mark-paid", validate(z.object({ reason: z.string().min(3).max(500) })), asyncHandler(async (req, res) => {
+    const doc: any = await Purchase.findById(req.params.purchaseId); if (!doc) throw notFound();
+    if (doc.status === "paid") {
+      const entitlement = await Entitlement.findOne({ sourcePurchaseId: String(doc._id) }).lean();
+      if (!entitlement) {
+        await Entitlement.updateOne(
+          { userId: doc.userId, contentType: doc.contentType, contentId: doc.contentId, sourcePurchaseId: String(doc._id) },
+          { $setOnInsert: { grantedAt: new Date(), active: true } }, { upsert: true });
+      }
+      return ok(res, { purchase: await Purchase.findById(doc._id).lean(), repaired: false });
+    }
+    if (!["pending", "risk_hold"].includes(doc.status)) throw badRequest(`Only pending/risk_hold orders can be marked paid (current: ${doc.status}).`);
+    const updated = await Purchase.findOneAndUpdate(
+      { _id: doc._id, status: { $in: ["pending", "risk_hold"] } },
+      { $set: { status: "paid" }, $push: { statusHistory: { status: "paid", source: `admin_mark_paid:${req.user!.id}` } } },
+      { returnDocument: "after" });
+    await Entitlement.updateOne(
+      { userId: doc.userId, contentType: doc.contentType, contentId: doc.contentId, sourcePurchaseId: String(doc._id) },
+      { $setOnInsert: { grantedAt: new Date(), active: true } }, { upsert: true }); // unique index prevents duplicates
+    await audit(req.user!.id, "purchase.mark_paid", "purchase", String(doc._id), req.requestId, `${req.body.reason} (tranId ${doc.tranId})`);
+    ok(res, { purchase: updated, repaired: true });
+  }));
 
   // ---- Teacher payouts -------------------------------------------------
   // Total earned = sum of PAID purchases of content the teacher owns.
   // Due payout = total earned − payouts already recorded by admins.
-  const OWNED_MODELS: [string, any][] = [["video", Video], ["playlist", Playlist], ["question", Question], ["exam", Exam], ["assignment", Assignment]];
+  const OWNED_MODELS: [string, any][] = [["video", Video], ["playlist", Playlist], ["question", Question], ["exam", Exam]];
   async function teacherFinances(teacherIds: string[]) {
     const earned = new Map<string, { total: number; sales: number }>();
     const paidOut = new Map<string, number>();
@@ -343,7 +369,7 @@ export function adminRouter(deps: { requireAuth: any; verified: any[]; authDb?: 
       totalEarned: Math.round(e.total * 100) / 100, salesCount: e.sales,
       totalPaidOut: Math.round(paid * 100) / 100,
       duePayout: Math.round((e.total - paid) * 100) / 100,
-      currency: "BDT",
+      currency: "USD",
       payout: {
         accountType: String(p.accountType ?? ""),
         holderName: String(p.holderName ?? ""),
@@ -387,11 +413,21 @@ export function adminRouter(deps: { requireAuth: any; verified: any[]; authDb?: 
         email: String(target?.email ?? profile?.email ?? ""),
       }, fin),
       history: history.map((p: any) => ({
-        id: String(p._id), amount: p.amount, currency: p.currency ?? "BDT",
+        id: String(p._id), amount: p.amount, currency: p.currency ?? "USD",
         note: p.note ?? "", createdBy: p.createdBy, createdAt: p.createdAt ?? null,
       })),
     });
   }));
+  // Serialize payout recording per teacher so concurrent requests cannot
+  // both pass the due check and overpay (single-process lock; the due amount
+  // is recomputed inside the lock).
+  const payoutLocks = new Map<string, Promise<unknown>>();
+  const withPayoutLock = <T,>(teacherId: string, fn: () => Promise<T>): Promise<T> => {
+    const prev = payoutLocks.get(teacherId) ?? Promise.resolve();
+    const run = prev.then(fn, fn);
+    payoutLocks.set(teacherId, run.catch(() => undefined));
+    return run;
+  };
   r.post("/payouts/:teacherId", validate(z.object({
     amount: z.number().positive().max(1_000_000_000),
     note: z.string().max(500).optional().default(""),
@@ -401,23 +437,18 @@ export function adminRouter(deps: { requireAuth: any; verified: any[]; authDb?: 
     const profile: any = !target ? await Profile.findOne({ userId: teacherId }).select("userId").lean().catch(() => null) : null;
     if (!target && !profile) throw notFound("Teacher not found");
     if (target && normalizeRole(target.role) !== "teacher") throw notFound("Teacher not found");
-    const fin = await teacherFinances([teacherId]);
-    const e = fin.earned.get(teacherId) ?? { total: 0, sales: 0 };
-    const due = Math.round((e.total - (fin.paidOut.get(teacherId) ?? 0)) * 100) / 100;
-    const amount = Math.round(Number(req.body.amount) * 100) / 100;
-    if (amount > due) throw badRequest(`Amount exceeds due payout (${due}).`);
-    const doc: any = await Payout.create({ teacherId, amount, currency: "BDT", note: String(req.body.note ?? ""), createdBy: req.user!.id });
-    await audit(req.user!.id, "payout.record", "user", teacherId, req.requestId, `Paid ${amount} BDT${req.body.note ? `: ${req.body.note}` : ""}`);
-    ok(res, { id: String(doc._id), teacherId, amount, duePayout: Math.round((due - amount) * 100) / 100 }, 201);
+    const result = await withPayoutLock(teacherId, async () => {
+      const fin = await teacherFinances([teacherId]);
+      const e = fin.earned.get(teacherId) ?? { total: 0, sales: 0 };
+      const due = Math.round((e.total - (fin.paidOut.get(teacherId) ?? 0)) * 100) / 100;
+      const amount = Math.round(Number(req.body.amount) * 100) / 100;
+      if (amount > due) throw badRequest(`Amount exceeds due payout (${due}).`);
+      const doc: any = await Payout.create({ teacherId, amount, currency: "USD", note: String(req.body.note ?? ""), createdBy: req.user!.id });
+      return { id: String(doc._id), amount, dueAfter: Math.round((due - amount) * 100) / 100 };
+    });
+    await audit(req.user!.id, "payout.record", "user", teacherId, req.requestId, `Paid ${result.amount} USD${req.body.note ? `: ${req.body.note}` : ""}`);
+    ok(res, { id: result.id, teacherId, amount: result.amount, duePayout: result.dueAfter }, 201);
   }));
-  const entitlementAction = (action: "revoke" | "restore") => asyncHandler(async (req, res) => {    const doc: any = await Entitlement.findById(req.params.entitlementId); if (!doc) throw notFound();
-    doc.active = action === "restore"; if (action === "revoke") { doc.revokedAt = new Date(); doc.revokeReason = req.body.reason; }
-    await doc.save();
-    await audit(req.user!.id, `entitlement.${action}`, "entitlement", String(doc._id), req.requestId, req.body.reason);
-    ok(res, { id: String(doc._id), active: doc.active });
-  });
-  r.post("/entitlements/:entitlementId/revoke", validate(z.object({ reason })), entitlementAction("revoke"));
-  r.post("/entitlements/:entitlementId/restore", validate(z.object({ reason })), entitlementAction("restore"));
   r.get("/analytics", validate(z.object({ from: z.string().datetime().optional(), to: z.string().datetime().optional() }), "query"), asyncHandler(async (req, res) => {
     const query = q(req); const to = query.to ? new Date(query.to) : new Date(); const from = query.from ? new Date(query.from) : new Date(to.getTime() - 30 * 86400000);
     if (to.getTime() - from.getTime() > 366 * 86400000) throw forbidden("Date range too large (max 366 days)");
@@ -437,6 +468,5 @@ export function adminRouter(deps: { requireAuth: any; verified: any[]; authDb?: 
     const [items, total] = await Promise.all([AuditLog.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(), AuditLog.countDocuments(filter)]);
     ok(res, { items, total });
   }));
-  r.get("/health", asyncHandler(async (_req, res) => ok(res, { status: "ok", database: isDbReady() ? "connected" : "disconnected", timestamp: new Date().toISOString() })));
   return r;
 }

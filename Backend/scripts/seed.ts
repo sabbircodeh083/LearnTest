@@ -1,5 +1,5 @@
 import { connectDatabase, closeDatabase } from "../src/config/database.js";
-import { Video, Exam, Assignment } from "../src/models/index.js";
+import { Video, Exam } from "../src/models/index.js";
 // Dev-only seed with clearly fake data. No real users/passwords. Content is owned by placeholder dev IDs.
 async function main() {
   await connectDatabase();
@@ -16,7 +16,7 @@ async function main() {
         status: "published",
         visibility: "public",
         price: 0,
-        currency: "BDT",
+        currency: "USD",
         tags: ["seed"],
       },
     },
@@ -32,22 +32,8 @@ async function main() {
         visibility: "public",
         durationMinutes: 30,
         price: 500,
-        currency: "BDT",
+        currency: "USD",
         questionIds: [],
-      },
-    },
-    { upsert: true },
-  );
-  await Assignment.updateOne(
-    { title: "Dev Seed: Sample Assignment" },
-    {
-      $setOnInsert: {
-        ownerId,
-        title: "Dev Seed: Sample Assignment",
-        status: "published",
-        visibility: "public",
-        price: 0,
-        currency: "BDT",
       },
     },
     { upsert: true },

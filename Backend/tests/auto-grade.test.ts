@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isAutoGradable, selectedIndexes, gradeMcqExam } from "../src/services/auto-grade.js";
+import { autoFeedbackForPercent, isAutoGradable, selectedIndexes, gradeMcqExam } from "../src/services/auto-grade.js";
 
 const single = {
   _id: "q1", type: "mcq",
@@ -41,5 +41,25 @@ describe("MCQ auto-grading", () => {
     expect(gradeMcqExam([single, multi], { q1: 0, q2: [0, 1, 3] })).toMatchObject({ score: 3, correctCount: 1 });
     // text answers accepted
     expect(gradeMcqExam([single], { q1: "4" })).toMatchObject({ score: 2, correctCount: 1 });
+  });
+
+  it("assigns tiered automatic feedback by percentage", () => {
+    expect(autoFeedbackForPercent(100)).toBe("Great job, keep going!");
+    expect(autoFeedbackForPercent(80)).toBe("Great job, keep going!");
+    expect(autoFeedbackForPercent(79.9)).toBe("Good job, try to be better.");
+    expect(autoFeedbackForPercent(60)).toBe("Good job, try to be better.");
+    expect(autoFeedbackForPercent(59.9)).toBe("You can be better, keep hard work.");
+    expect(autoFeedbackForPercent(50)).toBe("You can be better, keep hard work.");
+    expect(autoFeedbackForPercent(49.9)).toBe("Be serious, it is high time.");
+    expect(autoFeedbackForPercent(0)).toBe("Be serious, it is high time.");
+  });
+
+  it("embeds the tier message in the grading feedback", () => {
+    // 5/5 marks = 100% → top tier
+    expect(gradeMcqExam([single, multi], { q1: 1, q2: [0, 1, 3] }).feedback).toContain("Great job, keep going!");
+    // 2/5 marks = 40% → bottom tier
+    expect(gradeMcqExam([single, multi], { q1: 1, q2: [0, 1] }).feedback).toContain("Be serious, it is high time.");
+    // 3/5 marks = 60% → second tier
+    expect(gradeMcqExam([single, multi], { q1: 0, q2: [0, 1, 3] }).feedback).toContain("Good job, try to be better.");
   });
 });

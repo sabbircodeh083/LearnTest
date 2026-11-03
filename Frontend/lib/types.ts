@@ -1,5 +1,5 @@
 export type Role = "student" | "teacher" | "admin";
-export type ContentType = "video" | "playlist" | "question" | "exam" | "assignment";
+export type ContentType = "video" | "playlist" | "question" | "exam";
 
 export interface Me {
   id: string;
@@ -102,24 +102,10 @@ export interface ExamAttempt {
 export interface AttemptStudent { userId: string; name: string; email: string; avatarUploadId?: string | null }
 export interface ExamAttemptRow extends ExamAttempt { student: AttemptStudent }
 
-export interface Assignment extends ContentBase {
-  dueAt?: string;
-  maxScore: number;
-  maxAttempts: number | null;
-  videoId: string;
-  passingMarks?: number;
-  playlistId?: string | null;
-  // Project-style fields (mirrors the backend Assignment schema).
-  rubric?: unknown;
-  submissionTypes?: string[];
-  maxFileSize?: string;
-  maxFiles?: number;
-}
-
 export type TestKind = "quiz" | "written" | "problem" | "project";
 export interface MyTest {
   _id: string;
-  source: "exam" | "assignment";
+  source: "exam";
   kind: TestKind;
   title: string;
   description: string;
@@ -139,19 +125,6 @@ export interface MyTest {
 }
 export interface MyTestPage extends Page<MyTest> {
   counts: { all: number; published: number; drafts: number; archived: number };
-}
-
-export interface Submission {
-  _id: string;
-  assignmentId: string;
-  studentId: string;
-  uploadId: string | null;
-  repoUrl: string;
-  liveUrl: string;
-  state: "submitted" | "under_review" | "graded" | "returned";
-  grade: number | null;
-  feedback: string;
-  createdAt: string;
 }
 
 export interface Purchase {
@@ -188,7 +161,7 @@ export interface UploadDoc {
 }
 
 export interface TeacherProfile {
-  userId: string; email: string; name: string; role: Role; bio: string;
+  userId: string; email?: string; name: string; role: Role; bio: string;
   avatarUploadId: string | null; coverUploadId?: string | null; createdAt: string;
   username?: string; subject?: string; university?: string; degree?: string; location?: string;
   skills?: string[];
@@ -205,9 +178,13 @@ export interface AdminOverview {
 }
 
 export const idOf = (doc: { _id?: string; id?: string }) => String(doc._id ?? doc.id ?? "");
+export const currencySymbol = (currency?: string | null) =>
+  currency === "USD" ? "$" : currency === "BDT" ? "৳" : currency ? `${currency} ` : "";
+export const priceLabel = (price?: number | null, currency?: string | null) =>
+  (price ?? 0) > 0 ? `${currencySymbol(currency)}${Number(price).toLocaleString()}` : "Free";
 export const fmtDate = (value?: string | null) =>
   value ? new Date(value).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "—";
-export const fmtMoney = (amount: number, currency = "BDT") =>
+export const fmtMoney = (amount: number, currency = "USD") =>
   `${currency} ${Number(amount ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 export const scanLabel: Record<UploadDoc["scanStatus"], string> = {
   pending_scan: "Pending scan", clean: "Clean", suspicious: "Suspicious",

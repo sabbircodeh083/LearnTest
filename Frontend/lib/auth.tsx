@@ -1,5 +1,6 @@
 "use client";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { apiGet, apiPost, ApiError } from "./api";
 import type { Me } from "./types";
 
@@ -43,3 +44,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export const roleHome = (role?: string) =>
   role === "admin" ? "/admin" : role === "teacher" ? "/teacher" : "/student";
+
+/**
+ * Guard for guest-only pages (sign-in / sign-up): a signed-in user cannot
+ * stay on them — they are sent back to their workspace (or role selection)
+ * and can only see those pages again after signing out. Pages should keep
+ * rendering a loading state while `loading || user`, so the form never
+ * flashes before the redirect runs.
+ */
+export function useRedirectIfSignedIn(returnTo?: string | null) {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (loading || !user) return;
+    const home = !user.roleSelected && user.role !== "admin" ? "/select-role" : roleHome(user.role);
+    // A returnTo pointing back at an auth page would loop — ignore it.
+    const dest = returnTo && !/^\/(sign-in|sign-up)(\/|$|\?)/.test(returnTo) ? returnTo : home;
+    router.replace(dest);
+  }, [loading, user, router, returnTo]);
+
+  return { user, loading };
+}

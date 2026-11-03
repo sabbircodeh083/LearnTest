@@ -3,8 +3,10 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Empty, ErrorBox, Loading, useToast } from "@/components/ui";
+import { useDialog } from "@/components/AlertDialog";
 import { apiDelete, apiGet, apiPatch, ApiError, qs } from "@/lib/api";
-import { fmtDate, type MyTest, type MyTestPage, type TestKind } from "@/lib/types";
+import { fmtDate, priceLabel, type MyTest, type MyTestPage, type TestKind } from "@/lib/types";
+import { DataList, DataRow, RowIcon } from "@/components/DataList";
 
 const PAGE_SIZE = 20;
 type Tab = "all" | "published" | "drafts" | "archived";
@@ -40,11 +42,12 @@ function BackToProfile() {
     <Link href="/teacher/profile" className="text-[15px] text-muted hover:text-ink">←&nbsp;&nbsp;Back to Profile</Link>
   );
 }
-const detailsHref = (t: MyTest) => (t.source === "exam" ? `/teacher/exams/${t._id}` : `/teacher/assignments/${t._id}`);
-const endpointOf = (t: MyTest) => (t.source === "exam" ? `/api/v1/exams/${t._id}` : `/api/v1/assignments/${t._id}`);
+const detailsHref = (t: MyTest) => `/teacher/exams/${t._id}`;
+const endpointOf = (t: MyTest) => `/api/v1/exams/${t._id}`;
 
 export default function AllTestsPage() {
   const toast = useToast();
+  const { confirm } = useDialog();
   const [tab, setTab] = useState<Tab>("all");
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -112,7 +115,7 @@ export default function AllTestsPage() {
 
   const hardDelete = async (t: MyTest) => {
     setMenuId(null);
-    if (!window.confirm(`Hard delete "${t.title}"?\n\nThis permanently deletes the test${t.source === "exam" ? " and its questions (when not used by another test)" : " and its submissions"}. This cannot be undone.`)) return;
+    if (!(await confirm({ title: `Hard delete "${t.title}"?`, message: "This permanently deletes the test and its questions (when not used by another test). This cannot be undone.", confirmLabel: "Hard delete", danger: true }))) return;
     setBusyId(t._id);
     try {
       await apiDelete(endpointOf(t));
@@ -203,51 +206,23 @@ export default function AllTestsPage() {
             : !items.length ? <Empty title="No tests found" body="Nothing matches these filters. Reset them, or create your first test." action={<Link href="/teacher/exams/new" className="inline-flex rounded-lg bg-[#16a34a] px-4 py-2 text-sm font-semibold text-white">Create Test</Link>} />
             : (
               <>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[860px] text-left text-sm">
-                    <thead>
-                      <tr className="text-[13px] text-muted">
-                        <th className="rounded-l-lg bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">#</th>
-                        <th className="bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Test Title</th>
-                        <th className="bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Type</th>
-                        <th className="bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Price</th>
-                        <th className="bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Status</th>
-                        <th className="rounded-r-lg bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-line">
-                      {items.map((t, i) => {
-                        const meta = KIND_META[t.kind];
-                        const bucketLabel = t.archived ? "Archived" : t.status === "published" ? "Published" : t.status === "draft" ? "Draft" : t.status;
-                        return (
-                          <tr key={`${t.source}-${t._id}`} className="align-middle">
-                            <td className="px-4 py-4 text-muted">{i + 1}</td>
-                            <td className="max-w-[340px] px-4 py-4">
-                              <p className="truncate font-bold">{t.title}</p>
-                              <p className="mt-0.5 line-clamp-1 text-[13px] text-muted">{t.description || "No description."}</p>
-                              <p className="mt-0.5 text-xs text-muted">{fmtDate(t.createdAt)}{t.deadline ? ` · Deadline ${fmtDate(t.deadline)}` : ""}</p>
-                            </td>
-                            <td className="whitespace-nowrap px-4 py-4">
-                              <span className={`inline-flex items-center gap-2 font-medium ${meta.cls}`}>
-                                <span aria-hidden className={`flex h-8 w-8 items-center justify-center rounded-lg ${KIND_BG[t.kind]}`}>{meta.icon}</span>
-                                {meta.label}
-                              </span>
-                            </td>
-                            <td className="whitespace-nowrap px-4 py-4">
-                              {t.price > 0 ? (
-                                <span className="inline-flex items-center gap-1 rounded-md bg-[#dcfce7] px-2.5 py-1 text-[13px] font-bold text-[#16a34a]">
-                                  ৳ {Number(t.price).toLocaleString()}
-                                </span>
-                              ) : (
-                                <span className="inline-flex rounded-md bg-soft px-2.5 py-1 text-[13px] font-semibold text-muted">Free</span>
-                              )}
-                            </td>
-                            <td className="whitespace-nowrap px-4 py-4">
-                              <span className={`inline-flex rounded-md px-2.5 py-1 text-[13px] font-semibold ${bucketLabel === "Published" ? "bg-[#dcfce7] text-[#16a34a]" : bucketLabel === "Archived" ? "bg-[#fef3e2] text-[#b45309]" : "bg-soft text-muted"}`}>
-                                {bucketLabel}
-                              </span>
-                            </td>
-                            <td className="whitespace-nowrap px-4 py-4">
+                <DataList label="All tests">
+                  {items.map((t) => {
+                    const meta = KIND_META[t.kind];
+                    const bucketLabel = t.archived ? "Archived" : t.status === "published" ? "Published" : t.status === "draft" ? "Draft" : t.status;
+                    return (
+                      <DataRow
+                        key={t._id}
+                        icon={<RowIcon tone={KIND_BG[t.kind]}><span className={meta.cls}>{meta.icon}</span></RowIcon>}
+                        title={t.title}
+                        meta={<>{meta.label} · {fmtDate(t.createdAt)}{t.deadline ? ` · Deadline ${fmtDate(t.deadline)}` : ""} · {priceLabel(t.price, t.currency)}</>}
+                        detail={t.description || "No description."}
+                        chip={
+                          <span className={`inline-flex rounded-md px-2.5 py-1 text-[13px] font-semibold ${bucketLabel === "Published" ? "bg-[#dcfce7] text-[#16a34a]" : bucketLabel === "Archived" ? "bg-[#fef3e2] text-[#b45309]" : "bg-soft text-muted"}`}>
+                            {bucketLabel}
+                          </span>
+                        }
+                        actions={
                               <div className="relative flex items-center gap-1">
                                 <Link href={detailsHref(t)}
                                   className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-3.5 py-2 text-[13px] font-semibold text-[#1d6ce0] hover:bg-[#eff6ff]">
@@ -291,13 +266,11 @@ export default function AllTestsPage() {
                                   </>
                                 )}
                               </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                          }
+                      />
+                    );
+                  })}
+                </DataList>
 
                 {/* pagination: fetch 20 at a time */}
                 <div className="mt-4 rounded-xl border border-line bg-card px-4 py-4 text-center">

@@ -8,7 +8,6 @@ export const CONTENT_TYPES = [
   "playlist",
   "question",
   "exam",
-  "assignment",
 ] as const;
 
 // Role lives ONLY in the Better Auth `user` collection — never on profiles.
@@ -63,7 +62,7 @@ export const Profile =
 
 const price = {
   price: { type: Number, min: 0, default: 0 },
-  currency: { type: String, length: 3, default: "BDT" },
+  currency: { type: String, length: 3, default: "USD" },
 };
 const contentBase = {
   ownerId: { type: String, required: true, index: true },
@@ -188,49 +187,6 @@ attemptSchema.index(
 );
 export const ExamAttempt =
   mongoose.models.ExamAttempt || mongoose.model("ExamAttempt", attemptSchema);
-
-const assignmentSchema = new Schema(
-  {
-    ...contentBase,
-    dueAt: Date,
-    maxScore: { type: Number, min: 1, max: 10000, default: 100 },
-    maxAttempts: { type: Number, min: 1, max: 20, default: 1 },
-    videoId: { type: String, maxlength: 100, default: "" },
-    passingMarks: { type: Number, min: 0, default: 0 },
-    playlistId: { type: String, default: null },
-    // Project-style fields for assignment-format project tests (all optional
-    // so legacy documents stay valid): grading criteria, allowed submission
-    // slots, and file-upload limits.
-    rubric: { type: Schema.Types.Mixed, default: [] },
-    submissionTypes: { type: [String], default: [] },
-    maxFileSize: { type: String, maxlength: 50, default: "" },
-    maxFiles: { type: Number, min: 1, max: 10, default: 1 },
-  },
-  opts,
-);
-export const Assignment =
-  mongoose.models.Assignment || mongoose.model("Assignment", assignmentSchema);
-
-const submissionSchema = new Schema(
-  {
-    assignmentId: { type: String, required: true, index: true },
-    studentId: { type: String, required: true, index: true },
-    uploadId: { type: String, default: null },
-    repoUrl: { type: String, maxlength: 2048, default: "" },
-    liveUrl: { type: String, maxlength: 2048, default: "" },
-    state: {
-      type: String,
-      enum: ["submitted", "under_review", "graded", "returned"],
-      default: "submitted",
-    },
-    grade: { type: Number, default: null },
-    feedback: { type: String, maxlength: 5000, default: "" },
-  },
-  opts,
-);
-submissionSchema.index({ studentId: 1, createdAt: -1 });
-export const Submission =
-  mongoose.models.Submission || mongoose.model("Submission", submissionSchema);
 
 const commentSchema = new Schema(
   {
@@ -364,7 +320,7 @@ const payoutSchema = new Schema(
   {
     teacherId: { type: String, required: true, index: true },
     amount: { type: Number, required: true, min: 0 },
-    currency: { type: String, length: 3, default: "BDT" },
+    currency: { type: String, length: 3, default: "USD" },
     note: { type: String, maxlength: 500, default: "" },
     createdBy: { type: String, required: true },
   },

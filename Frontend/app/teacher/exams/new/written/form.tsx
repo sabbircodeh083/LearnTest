@@ -1,11 +1,13 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Notice, useToast } from "@/components/ui";
 import { apiDelete, apiGet, apiPatch, apiPost, ApiError, qs } from "@/lib/api";
-import { useFetch } from "@/lib/hooks";
+import { useFetch, usePublicConfig } from "@/lib/hooks";
+import { checkFutureDate, checkPrice, checkTags } from "@/lib/validation";
 import type { Page, Playlist } from "@/lib/types";
+import { currencySymbol } from "@/lib/types";
 
 const inputCls =
   "w-full rounded-lg border border-line bg-card px-3.5 py-2.5 text-[15px] text-ink placeholder:text-muted/70 focus:border-brand";
@@ -101,7 +103,14 @@ export function WrittenForm({ initial }: { initial?: WrittenFormInitial }) {
   const [tags, setTags] = useState<string[]>(initial?.tags ?? []);
   const [pricing, setPricing] = useState<"free" | "paid">(initial?.pricing ?? "paid");
   const [price, setPrice] = useState(initial?.price ?? "");
-  const [currency, setCurrency] = useState(isEdit ? "BDT" : "");
+  const [currency, setCurrency] = useState("");
+  // Currency options and default come from GET /api/v1/config (backend .env).
+  const { config } = usePublicConfig();
+  const defaultCurrency = config?.defaultCurrency || "USD";
+  const currencies = config?.currencies?.length ? config.currencies : [defaultCurrency];
+  useEffect(() => {
+    if (!currency && config?.defaultCurrency) setCurrency(config.defaultCurrency);
+  }, [currency, config]);
 
   const [questions, setQuestions] = useState<DraftWritten[]>(() =>
     initial
@@ -151,26 +160,29 @@ export function WrittenForm({ initial }: { initial?: WrittenFormInitial }) {
 
   const addQuestion = () => {
     if (!newText.trim()) { setError("Write the question text first."); return; }
+    if (!newMarks.trim()) { setError("Marks is required — enter a number from 0 to 1000."); return; }
     const m = Number(newMarks);
     if (!Number.isFinite(m) || m < 0 || m > 1000) { setError("Marks must be 0–1000."); return; }
     setError("");
-    setQuestions((qs) => [...qs, { key: newKey(), kind: newKind, text: newText.trim(), marks: newMarks || "0", editing: false }]);
+    setQuestions((qs) => [...qs, { key: newKey(), kind: newKind, text: newText.trim(), marks: newMarks, editing: false }]);
     setNewText(""); setNewMarks(""); setNewKind("short"); setEditorOpen(false);
   };
 
   const save = async (nextStatus: "draft" | "published") => {
     setError("");
     if (!title.trim()) { setError("Title is required."); return; }
+    const tagErr = checkTags(tags); if (tagErr) { setError(tagErr); return; }
     if (!questions.length) { setError("Add at least one question."); return; }
-    if (questions.some((q) => !q.text.trim())) { setError("Every question needs text."); return; }
-    if (questions.some((q) => { const m = Number(q.marks); return !Number.isFinite(m) || m < 0 || m > 1000; })) { setError("Question marks must be 0–1000."); return; }
+    { const bad = questions.findIndex((q) => !q.text.trim()); if (bad >= 0) { setError(`Question ${bad + 1} needs text.`); return; } }
+    { const bad = questions.findIndex((q) => { const m = Number(q.marks); return q.marks.trim() === "" || !Number.isFinite(m) || m < 0 || m > 1000; }); if (bad >= 0) { setError(`Question ${bad + 1} marks must be between 0 and 1000.`); return; } }
     if (!Number.isInteger(totalNum) || totalNum < 1) { setError("Total marks must be at least 1."); return; }
     if (questionsSum !== totalNum) { setError(`Question marks add up to ${questionsSum}, but total marks is ${totalNum}. Make them match.`); return; }
+    if (!passingMarks.trim()) { setError("Passing marks is required — enter 0 or more."); return; }
     if (!(passNum >= 0 && passNum <= totalNum)) { setError(`Passing marks must be between 0 and ${totalMarks}.`); return; }
-    if (!deadline) { setError("Deadline is required."); return; }
+    const dlErr = checkFutureDate("Deadline", deadline); if (dlErr) { setError(dlErr); return; }
     const att = attempts === "unlimited" ? null : Number(attempts);
     if (att !== null && (!Number.isInteger(att) || att < 1 || att > 20)) { setError("Attempts allowed must be 1–20 or No bound."); return; }
-    if (pricing === "paid" && !(Number(price) > 0)) { setError("Set a price above 0 for a paid test (or choose Free Test)."); return; }
+    if (pricing === "paid") { const pe = checkPrice(price); if (pe) { setError(pe); return; } if (!currency) { setError("Currency is required for a paid written test — choose a currency."); return; } }
 
     setBusy(nextStatus === "draft" ? "draft" : "publish");
     try {
@@ -179,7 +191,7 @@ export function WrittenForm({ initial }: { initial?: WrittenFormInitial }) {
       const questionPayload = (q: DraftWritten) => ({
         title: q.text.trim().slice(0, 200), description: KIND_META[q.kind].label, tags,
         visibility, status: nextStatus,
-        price: 0, currency: "BDT",
+        price: 0, currency: defaultCurrency,
         type: "short", prompt: q.text.trim(), answer: "", rubric: "",
         linkedContentId: null,
         options: [], correctOptions: [],
@@ -215,7 +227,7 @@ export function WrittenForm({ initial }: { initial?: WrittenFormInitial }) {
       const payload = {
         title: title.trim(), description, tags,
         visibility, status: nextStatus,
-        price: pricing === "paid" ? Number(price) : 0, currency: currency || "BDT",
+        price: pricing === "paid" ? Number(price) : 0, currency: currency || defaultCurrency,
         questionIds: ids,
         // Take-home PDF test: no per-sitting time limit, so use the max window.
         durationMinutes: 1440, maxAttempts: att,
@@ -306,13 +318,13 @@ export function WrittenForm({ initial }: { initial?: WrittenFormInitial }) {
             {pricing === "paid" && (
               <div className="mt-3 grid gap-4 sm:grid-cols-2">
                 <div>
-                  <Label required>Price ({currency || "BDT"})</Label>
+                  <Label required>Price ({currency || defaultCurrency})</Label>
                   <input type="number" min={1} value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Set amount" className={inputCls} />
                   <p className="mt-1.5 text-[13px] text-muted">Set a price for this test. Students need to purchase to access the test.</p>
                 </div>
                 <div>
                   <Label required>Currency</Label>
-                  <select value={currency} onChange={(e) => setCurrency(e.target.value)} className={inputCls}><option value="" disabled>Set currency</option><option value="BDT">BDT (৳)</option><option value="USD">USD ($)</option></select>
+                  <select value={currency} onChange={(e) => setCurrency(e.target.value)} className={inputCls}><option value="" disabled>Set currency</option>{currencies.map((c) => <option key={c} value={c}>{c} ({currencySymbol(c)})</option>)}</select>
                 </div>
               </div>
             )}
@@ -375,7 +387,7 @@ export function WrittenForm({ initial }: { initial?: WrittenFormInitial }) {
                           <option value="essay">Essay</option>
                         </select>
                         <textarea value={q.text} onChange={(e) => patchQ(q.key, { text: e.target.value })} rows={3} maxLength={5000} placeholder="Write a question here" className={inputCls} aria-label="Question text" />
-                        <button type="button" onClick={() => patchQ(q.key, { editing: false })}
+                        <button type="button" onClick={() => { if (!q.text.trim()) { setError(`Question ${qi + 1} needs text.`); return; } setError(""); patchQ(q.key, { editing: false }); }}
                           className="rounded-lg bg-[#16a34a] px-3.5 py-1.5 text-sm font-semibold text-white hover:bg-[#15803d]">Done</button>
                       </div>
                     ) : (
@@ -499,7 +511,7 @@ export function WrittenForm({ initial }: { initial?: WrittenFormInitial }) {
               <div className="mt-3">
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-bold">{title.trim() || "Untitled test"}</p>
-                  {pricing === "paid" && <span className="shrink-0 rounded-md bg-[#dcfce7] px-2 py-0.5 text-sm font-bold text-[#16a34a]">{Number(price) || 0}৳</span>}
+                  {pricing === "paid" && <span className="shrink-0 rounded-md bg-[#dcfce7] px-2 py-0.5 text-sm font-bold text-[#16a34a]">{currencySymbol(currency || 'USD')}{Number(price) || 0}</span>}
                 </div>
                 <p className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[13px] text-muted">
                   <span>📄 {questions.length} Question{questions.length === 1 ? "" : "s"}</span>
@@ -557,7 +569,7 @@ export function WrittenForm({ initial }: { initial?: WrittenFormInitial }) {
               {[
                 ["Total Marks", totalMarks || "—"],
                 ["Passing Marks", `${passingMarks || "—"} (${passPct}%)`],
-                ["Price", pricing === "paid" ? `${Number(price) || 0} ${currency || "BDT"}` : "Free"],
+                ["Price", pricing === "paid" ? `${Number(price) || 0} ${currency || defaultCurrency}` : "Free"],
                 ["Deadline", deadline ? fmtDeadline(deadline) : "—"],
                 ["Max File Size", maxFileSize],
                 ["Max Files", maxFiles],

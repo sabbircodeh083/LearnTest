@@ -1,7 +1,9 @@
 "use client";
 import { useState } from "react";
 import { Badge, Btn, Empty, ErrorBox, inputCls, Loading, PageHead, statusTone } from "@/components/ui";
+import { DataList, DataRow, RowIcon } from "@/components/DataList";
 import { apiGet, qs } from "@/lib/api";
+import { ModalShell } from "@/components/AlertDialog";
 import { useFetch } from "@/lib/hooks";
 import { fmtDate, fmtMoney, type Page, type Purchase } from "@/lib/types";
 
@@ -17,9 +19,7 @@ function DetailsModal({ purchase, onClose }: { purchase: Purchase; onClose: () =
     () => apiGet<PurchaseDetail>(`/api/v1/admin/purchases/${purchase._id}`), [purchase._id]);
   const content = data?.content;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={`Payment ${purchase.tranId}`}>
-      <button type="button" aria-label="Close details" className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-line bg-card p-6 shadow-xl">
+    <ModalShell label={`Payment ${purchase.tranId}`} onClose={onClose} maxWidth="max-w-lg">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-bold">Payment Details</h2>
@@ -53,8 +53,7 @@ function DetailsModal({ purchase, onClose }: { purchase: Purchase; onClose: () =
               </dl>
             )}
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }
 
@@ -87,20 +86,22 @@ export default function AdminPaymentsPage() {
       {loading ? <Loading label="Loading payments…" /> : error ? <ErrorBox message={error} onRetry={retry} /> :
         !data?.items.length ? <Empty title="No payments found" body={submitted ? `No transaction matches “${submitted}”.` : "No purchases match this status."} /> : (
           <>
-            <div className="overflow-x-auto rounded-xl border border-line">
-              <table className="w-full min-w-[720px] text-left text-sm">
-                <thead className="bg-soft text-xs uppercase tracking-wide text-muted"><tr><th className="px-4 py-3">Date</th><th className="px-4 py-3">Amount</th><th className="px-4 py-3">Transaction</th><th className="px-4 py-3">Status</th><th className="px-4 py-3 text-right">Details</th></tr></thead>
-                <tbody>{data.items.map((p) => (
-                  <tr key={p._id} className="border-t border-line">
-                    <td className="px-4 py-3">{fmtDate(p.createdAt)}</td>
-                    <td className="px-4 py-3 font-medium">{fmtMoney(p.amount, p.currency)}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-muted">{p.tranId}</td>
-                    <td className="px-4 py-3"><Badge tone={statusTone(p.status)}>{p.status.replace("_", " ")}</Badge></td>
-                    <td className="px-4 py-3 text-right"><Btn variant="ghost" onClick={() => setSelected(p)}>Details</Btn></td>
-                  </tr>
-                ))}</tbody>
-              </table>
-            </div>
+            <DataList label="Payments">
+              {data.items.map((p) => (
+                <DataRow
+                  key={p._id}
+                  icon={
+                    <RowIcon tone="bg-[#e6f9ec] text-[#16a34a]">
+                      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M7 8h10l1.5 12.5a1 1 0 0 1-1 1.1H6.5a1 1 0 0 1-1-1.1z" /><path d="M8.5 10V6.5a3.5 3.5 0 0 1 7 0V10" /></svg>
+                    </RowIcon>
+                  }
+                  title={fmtMoney(p.amount, p.currency)}
+                  meta={<>{fmtDate(p.createdAt)} · <span className="break-all font-mono text-xs">{p.tranId}</span></>}
+                  chip={<Badge tone={statusTone(p.status)}>{p.status.replace("_", " ")}</Badge>}
+                  actions={<Btn variant="ghost" onClick={() => setSelected(p)}>Details</Btn>}
+                />
+              ))}
+            </DataList>
             <div className="mt-5 flex items-center gap-3"><Btn variant="ghost" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Btn><span className="text-sm text-muted">Page {page} of {pages} · {data.total} payments</span><Btn variant="ghost" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>Next</Btn></div>
           </>
         )}

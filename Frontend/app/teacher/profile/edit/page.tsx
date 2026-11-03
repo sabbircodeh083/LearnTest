@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { ErrorBox, Loading, useToast } from "@/components/ui";
 import { apiPatch, apiUpload, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { usePublicConfig } from "@/lib/hooks";
 import { AvatarImg, CoverBanner } from "@/components/profile";
 import type { UploadDoc } from "@/lib/types";
 
@@ -39,6 +40,10 @@ export default function EditTeacherProfilePage() {
   const router = useRouter();
   const toast = useToast();
   const { user, loading, refresh } = useAuth();
+  // Image cap comes from GET /api/v1/config (backend .env) — never hardcoded.
+  const { config } = usePublicConfig();
+  const maxImageMB = config?.uploadLimits.image.sizeMB;
+  const maxImageBytes = maxImageMB ? maxImageMB * 1024 * 1024 : null;
 
   const [name, setName] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
@@ -80,10 +85,11 @@ export default function EditTeacherProfilePage() {
 
   const addSkill = () => {
     const t = skillDraft.trim().replace(/,+$/, "");
-    if (!t) return;
-    if (vSkills.length >= 20) { toast("At most 20 skills.", "err"); return; }
-    if (vSkills.some((s) => s.toLowerCase() === t.toLowerCase())) { setSkillDraft(""); return; }
-    setSkills([...vSkills, t.slice(0, 40)]);
+    if (!t) { toast("Type a skill first, then press Enter to add it.", "err"); return; }
+    if (t.length > 40) { toast("Each skill must be 40 characters or less.", "err"); return; }
+    if (vSkills.length >= 20) { toast("You can add at most 20 skills — remove one first.", "err"); return; }
+    if (vSkills.some((s) => s.toLowerCase() === t.toLowerCase())) { toast(`"${t}" is already in your skills.`, "err"); setSkillDraft(""); return; }
+    setSkills([...vSkills, t]);
     setSkillDraft("");
   };
 
@@ -97,7 +103,7 @@ export default function EditTeacherProfilePage() {
   const pickImage = (file: File | undefined, kind: "avatar" | "cover") => {
     if (!file) return;
     if (!/\.(png|jpe?g|webp)$/i.test(file.name)) { toast("Only PNG, JPG or WebP images are allowed.", "err"); return; }
-    if (file.size > 5 * 1024 * 1024) { toast("Image must be under 5MB.", "err"); return; }
+    if (maxImageBytes && file.size > maxImageBytes) { toast(`Image must be under ${maxImageMB}MB.`, "err"); return; }
     const url = URL.createObjectURL(file);
     if (kind === "avatar") {
       if (avatarPreview) URL.revokeObjectURL(avatarPreview);
@@ -208,7 +214,7 @@ export default function EditTeacherProfilePage() {
                   </div>
                   <div>
                     <p className="text-[15px] font-semibold text-[#1d6ce0]">Change Photo</p>
-                    <p className="text-[13px] text-muted">{avatarPreview || coverPreview ? "Preview — applies when you Save Changes" : "JPG, PNG up to 5MB"}</p>
+                    <p className="text-[13px] text-muted">{avatarPreview || coverPreview ? "Preview — applies when you Save Changes" : maxImageMB ? `JPG, PNG up to ${maxImageMB}MB` : "JPG, PNG (server limit applies)"}</p>
                   </div>
                 </div>
               </section>
@@ -285,7 +291,7 @@ export default function EditTeacherProfilePage() {
                   ))}
                   <input value={skillDraft} onChange={(e) => setSkillDraft(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addSkill(); } }}
-                    onBlur={addSkill}
+                    onBlur={() => { if (skillDraft.trim()) addSkill(); }}
                     placeholder={vSkills.length ? "" : "Add topics and press Enter..."}
                     aria-label="Add a topic and press Enter" className="min-w-[160px] flex-1 bg-transparent py-1 outline-none placeholder:text-muted/70" />
                 </div>

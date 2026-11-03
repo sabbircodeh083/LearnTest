@@ -5,7 +5,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { Empty, ErrorBox, Loading, useToast } from "@/components/ui";
 import { apiBlobUrl, apiDownload, apiGet, apiPatch, ApiError, qs } from "@/lib/api";
 import { useFetch } from "@/lib/hooks";
-import { fmtDate, idOf, type Assignment, type Exam, type ExamAttemptRow, type Page, type Question, type Submission } from "@/lib/types";
+import { fmtDate, idOf, type Exam, type ExamAttemptRow, type Page, type Question } from "@/lib/types";
 
 const inputCls = "w-full rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink placeholder:text-muted/70 shadow-[0_1px_3px_rgba(16,24,40,0.10)] outline-none focus:border-line";
 const cardCls = "rounded-xl border border-line bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.05)]";
@@ -65,7 +65,7 @@ function PdfCard({ uploadId, filename }: { uploadId: string; filename: string })
         </button>
       </div>
       {open && url && (
-        <iframe src={url} title="Submitted PDF" className="mt-3 h-[560px] w-full rounded-lg border border-line bg-card" />
+        <iframe sandbox="" src={url} title="Submitted PDF" className="mt-3 h-[560px] w-full rounded-lg border border-line bg-card" />
       )}
     </div>
   );
@@ -158,8 +158,9 @@ function ExamFeedback({ examId, initialAttemptId, fromArchive }: { examId: strin
     setError("");
     const breakdown = [];
     for (const it of items) {
+      if ((marks[it.key] ?? "").trim() === "") { setError(`Marks for "${it.label}" is required — enter 0 or more.`); return; }
       const m = Number(marks[it.key]);
-      if (!Number.isFinite(m) || m < 0) { setError(`Enter marks (0 or more) for "${it.label}".`); return; }
+      if (!Number.isFinite(m) || m < 0) { setError(`Marks for "${it.label}" must be 0 or more.`); return; }
       if (it.max > 0 && m > it.max) { setError(`"${it.label}" exceeds its max of ${it.max}.`); return; }
       breakdown.push({ key: it.key, label: it.label.slice(0, 200), maxMarks: it.max, marks: m, comment: (comments[it.key] ?? "").slice(0, 5000) });
     }
@@ -304,128 +305,6 @@ function ExamFeedback({ examId, initialAttemptId, fromArchive }: { examId: strin
   );
 }
 
-/* ---------- legacy assignment (overall grade only) ---------- */
-function AssignmentFeedback({ assignmentId, initialSubmissionId, fromArchive }: { assignmentId: string; initialSubmissionId: string; fromArchive: boolean }) {
-  const toast = useToast();
-  const project = useFetch(() => apiGet<Assignment>(`/api/v1/assignments/${assignmentId}`), [assignmentId]);
-  const subs = useFetch(() => apiGet<Page<Submission>>(`/api/v1/assignments/${assignmentId}/submissions${qs({ limit: 100, latest: 1 })}`), [assignmentId]);
-  const allRows = subs.data?.items ?? [];
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  useEffect(() => {
-    if (!selectedId && allRows.length) {
-      if (initialSubmissionId && allRows.some((r) => String(r._id) === initialSubmissionId)) setSelectedId(initialSubmissionId);
-      else {
-        const first = fromArchive ? allRows.find((r) => r.state === "graded") : allRows.find((r) => r.state !== "graded");
-        setSelectedId(first ? String(first._id) : String(allRows[0]!._id));
-      }
-    }
-  }, [allRows, selectedId, initialSubmissionId, fromArchive]);
-  const selected = allRows.find((r) => String(r._id) === selectedId) ?? null;
-  // Graded submissions live only in the Archive: the picker lists the current
-  // context (pending work, or graded work when opened from the Archive). The
-  // submission being viewed is always kept so grading can be finished.
-  const rows = useMemo(() => {
-    const list = fromArchive ? allRows.filter((r) => r.state === "graded") : allRows.filter((r) => r.state !== "graded");
-    if (selected && !list.some((r) => String(r._id) === String(selected._id))) return [selected, ...list];
-    return list;
-  }, [allRows, fromArchive, selected]);
-  const meta = KIND_META.project!;
-  const maxScore = project.data?.maxScore ?? 100;
-
-  const [grade, setGrade] = useState("");
-  const [feedback, setFeedback] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  useEffect(() => {
-    setGrade(selected?.grade !== null && selected?.grade !== undefined ? String(selected.grade) : "");
-    setFeedback(selected?.feedback ?? "");
-    setError("");
-  }, [selected?._id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const save = async () => {
-    if (!selected) return;
-    setError("");
-    const g = Number(grade);
-    if (!Number.isFinite(g) || g < 0) { setError("Enter a grade of 0 or more."); return; }
-    if (g > maxScore) { setError(`Grade cannot exceed max score (${maxScore}).`); return; }
-    setSaving(true);
-    try {
-      await apiPatch(`/api/v1/submissions/${selected._id}/grade`, { grade: g, feedback });
-      toast("Submission graded.");
-      subs.retry();
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not save grade.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <>
-      <div className="flex items-center gap-3">
-        <span aria-hidden className={`flex h-12 w-12 items-center justify-center rounded-xl ${meta.box}`}>
-          <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">{meta.icon}</svg>
-        </span>
-        <div>
-          <h1 className="text-[22px] font-bold tracking-tight">{project.data?.title ?? "…"}</h1>
-          <p className="text-sm text-muted"><span className={`mr-2 inline-flex rounded-md px-2 py-0.5 text-xs font-semibold ${meta.box}`}>Project</span>
-            {selected ? `Student ${selected.studentId.slice(0, 8)}… · ${selected.state.replace("_", " ")}` : "Pick a submission to grade."}</p>
-        </div>
-      </div>
-
-      {project.loading || subs.loading ? <div className="mt-6"><Loading label="Loading submissions…" /></div>
-        : project.error || !project.data ? <div className="mt-6"><ErrorBox message={project.error ?? "Project not found."} onRetry={project.retry} /></div>
-        : subs.error ? <div className="mt-6"><ErrorBox message={subs.error} onRetry={subs.retry} /></div>
-        : !rows.length ? <div className="mt-6"><Empty title="No submissions yet" body="Student project submissions will appear here for grading." /></div>
-        : (
-          <div className="mt-4 grid items-start gap-5 xl:grid-cols-3">
-            <div className="space-y-4 xl:col-span-2">
-              <label className="block">
-                <span className="mb-1.5 block text-sm font-medium">Student submission — current per student ({rows.length})</span>
-                <select value={selectedId ?? ""} onChange={(e) => setSelectedId(e.target.value)} className={`${inputCls} font-medium`}>
-                  {rows.map((s) => (
-                    <option key={String(s._id)} value={String(s._id)}>
-                      Student {s.studentId.slice(0, 8)}… · {s.state.replace("_", " ")}{s.state === "graded" ? ` · ${s.grade ?? "—"}/${maxScore}` : ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {selected && (
-                <article className={cardCls} aria-label="Submission content">
-                  <p className="text-xs text-muted">{fmtDate(selected.createdAt)}</p>
-                  <div className="mt-2 space-y-1.5 text-sm">
-                    {selected.repoUrl && <p className="break-all">Git: <a className="font-medium text-[#1d6ce0] underline" href={selected.repoUrl} target="_blank" rel="noreferrer">{selected.repoUrl}</a></p>}
-                    {selected.liveUrl && <p className="break-all">Live: <a className="font-medium text-[#1d6ce0] underline" href={selected.liveUrl} target="_blank" rel="noreferrer">{selected.liveUrl}</a></p>}
-                    {selected.uploadId && <p className="text-muted">Uploaded file ID: {selected.uploadId}</p>}
-                    {!selected.repoUrl && !selected.liveUrl && !selected.uploadId && <p className="text-muted">No links or files attached.</p>}
-                  </div>
-                </article>
-              )}
-            </div>
-            <aside className="xl:sticky xl:top-20" aria-label="Grading">
-              <section className={cardCls}>
-                <h2 className="text-[17px] font-bold">Grade</h2>
-                <p className="text-[13px] text-muted">Overall marks out of {maxScore}.</p>
-                {error && <p role="alert" className="mt-2 rounded-lg bg-dangersoft px-3 py-2 text-[13px] font-medium text-danger">{error}</p>}
-                <label className="mt-3 block">
-                  <span className="mb-1.5 block text-sm font-medium">Marks (max {maxScore})</span>
-                  <input type="number" min={0} max={maxScore} value={grade} onChange={(e) => setGrade(e.target.value)} className={inputCls} />
-                </label>
-                <label className="mt-3 block">
-                  <span className="mb-1.5 block text-sm font-medium">Feedback</span>
-                  <textarea rows={4} value={feedback} onChange={(e) => setFeedback(e.target.value)} className={inputCls} />
-                </label>
-                <button type="button" onClick={() => void save()} disabled={saving || !selected} className={`${gradeBtnCls} mt-3 w-full`}>
-                  {saving ? "Saving…" : "Save Grade"}
-                </button>
-              </section>
-            </aside>
-          </div>
-        )}
-    </>
-  );
-}
-
 export default function TeacherFeedbackPage() {
   return (
     <Suspense fallback={<div className="-m-4 bg-[#f7f9fc] p-4 dark:bg-bg sm:-m-6 sm:p-6 lg:-m-8 lg:p-8"><Loading label="Loading feedback…" /></div>}>
@@ -438,28 +317,22 @@ function FeedbackInner() {
   const params = useParams<{ id: string }>();
   const search = useSearchParams();
   const id = decodeURIComponent(String(params.id));
-  const source = search.get("source") === "assignment" ? "assignment" : "exam";
   const attempt = search.get("attempt") ?? "";
-  const submission = search.get("submission") ?? "";
   const from = search.get("from") ?? "";
   // Back goes where the teacher came from: test details (Student Submissions
   // tab), the Submissions queue, or the Archive.
   const back =
-    from === "test" && source === "exam"
+    from === "test"
       ? { href: `/teacher/exams/${id}?tab=submissions`, label: "Test Details" }
-      : from === "test"
-        ? { href: `/teacher/assignments/${id}?tab=submissions`, label: "Test Details" }
-        : from === "archive"
-          ? { href: "/teacher/archive", label: "Archive" }
-          : { href: "/teacher/submissions", label: "Submissions & Feedback" };
+      : from === "archive"
+        ? { href: "/teacher/archive", label: "Archive" }
+        : { href: "/teacher/submissions", label: "Submissions & Feedback" };
 
   return (
     <div className="-m-4 bg-[#f7f9fc] p-4 dark:bg-bg sm:-m-6 sm:p-6 lg:-m-8 lg:p-8">
       <Link href={back.href} className="text-[15px] text-muted hover:text-ink">←&nbsp;&nbsp;{back.label}</Link>
       <div className="mt-2">
-        {source === "exam"
-          ? <ExamFeedback examId={id} initialAttemptId={attempt} fromArchive={from === "archive"} />
-          : <AssignmentFeedback assignmentId={id} initialSubmissionId={submission} fromArchive={from === "archive"} />}
+        <ExamFeedback examId={id} initialAttemptId={attempt} fromArchive={from === "archive"} />
       </div>
     </div>
   );

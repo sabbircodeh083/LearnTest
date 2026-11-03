@@ -191,7 +191,7 @@ function EarningsChart({ monthly }: { monthly: MonthEarning[] }) {
         {ticks.map((t) => (
           <g key={t}>
             <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} className="stroke-line" strokeWidth="1" strokeDasharray="4 4" opacity="0.6" />
-            <text x={padL - 8} y={y(t) + 4} textAnchor="end" fontSize="11" className="fill-muted">৳ {t >= 1000 ? `${Math.round(t / 100) / 10}k` : Math.round(t).toLocaleString()}</text>
+            <text x={padL - 8} y={y(t) + 4} textAnchor="end" fontSize="11" className="fill-muted">$ {t >= 1000 ? `${Math.round(t / 100) / 10}k` : Math.round(t).toLocaleString()}</text>
           </g>
         ))}
         {monthly.map((m, i) => {
@@ -206,7 +206,7 @@ function EarningsChart({ monthly }: { monthly: MonthEarning[] }) {
                 rx="6" fill={active ? "#15803d" : "#16a34a"} opacity={active ? 1 : 0.9} />
               {m.total > 0 && (
                 <text x={cx} y={y(m.total) - 8} textAnchor="middle" fontSize="11" fontWeight="700" className="fill-muted">
-                  ৳ {m.total >= 1000 ? `${Math.round(m.total / 100) / 10}k` : Math.round(m.total).toLocaleString()}
+                  $ {m.total >= 1000 ? `${Math.round(m.total / 100) / 10}k` : Math.round(m.total).toLocaleString()}
                 </text>
               )}
               <text x={cx} y={H - 8} textAnchor="middle" fontSize="11" className="fill-muted">{fmtMonth(m.month)}</text>
@@ -222,7 +222,7 @@ function EarningsChart({ monthly }: { monthly: MonthEarning[] }) {
             top: 0,
           }}>
           <p className="font-bold">{fmtMonth(monthly[hover]!.month)} · {monthly[hover]!.month}</p>
-          <p className="font-semibold text-[#16a34a]">৳ {Number(monthly[hover]!.total ?? 0).toLocaleString()}</p>
+          <p className="font-semibold text-[#16a34a]">$ {Number(monthly[hover]!.total ?? 0).toLocaleString()}</p>
           <p className="text-muted">{monthly[hover]!.sales} paid sale{monthly[hover]!.sales === 1 ? "" : "s"}</p>
         </div>
       )}
@@ -282,7 +282,7 @@ export default function TeacherAnalysisPage() {
   const catalogueValue = paidPrices.reduce((s, p) => s + (Number(p.price) || 0), 0);
   const earningValue = earnings.data ? earnings.data.totalEarned : catalogueValue;
   const earningSub = earnings.data
-    ? `${earnings.data.salesCount} paid sales · ৳ ${earnings.data.totalPaidOut.toLocaleString()} paid out`
+    ? `${earnings.data.salesCount} paid sales · $ ${earnings.data.totalPaidOut.toLocaleString()} paid out`
     : "Priced catalogue value";
 
   const series = useMemo(() => {
@@ -347,7 +347,7 @@ export default function TeacherAnalysisPage() {
                     <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="4" width="14" height="16" rx="2" /><path d="M9 9.5h6M9 13h6M9 16.5h4" /></svg>
                   </span>
                 } />
-              <StatCard href="/teacher/earnings" label="Earning" value={fmtMoney(earningValue, "BDT")}
+              <StatCard href="/teacher/earnings" label="Earning" value={fmtMoney(earningValue, "USD")}
                 delta="" sub={earningSub}
                 iconBox={
                   <span aria-hidden className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#e6f9ec] text-[#16a34a]">

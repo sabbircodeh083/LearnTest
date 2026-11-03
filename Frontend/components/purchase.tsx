@@ -1,14 +1,20 @@
 "use client";
-import { useEffect, useState } from "react";
-import { Badge, Btn, useToast } from "./ui";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { Badge, Btn, ErrorBox, FieldError, Loading, useToast } from "./ui";
 import { apiGet, apiPost, ApiError } from "@/lib/api";
-import type { ContentType } from "@/lib/types";
+import { useFetch } from "@/lib/hooks";
+import { SaveButton } from "@/lib/saved";
+import { priceLabel, type ContentType } from "@/lib/types";
+import { isSafeGatewayUrl } from "@/lib/url";
 
 /** Shows entitlement state and, when needed, starts an SSLCOMMERZ payment.
  *  Price always comes from the backend record; this never sends an amount. */
 export async function startCheckout(contentType: ContentType, contentId: string, returnTo?: string): Promise<string | null> {
   const res = await apiPost<{ purchaseId: string; tranId: string; gatewayUrl: string | null; note?: string }>(
     "/api/v1/payments/sslcommerz/initiate", { contentType, contentId, returnTo });
+  // Only ever navigate the browser to the real payment gateway over https.
+  if (res.gatewayUrl && !isSafeGatewayUrl(res.gatewayUrl)) throw new ApiError(502, "BAD_GATEWAY", "The payment gateway returned an unexpected address.");
   return res.gatewayUrl;
 }
 export function BuyPanel({ contentType, contentId, price, currency }: {
@@ -55,10 +61,79 @@ export function BuyPanel({ contentType, contentId, price, currency }: {
   );
 }
 
+/** Safe metadata returned by the locked-preview endpoints (never playback secrets). */
+export interface LockedPreview {
+  _id: string; title: string; description?: string;
+  price: number; currency: string; entitled?: boolean;
+}
+
+/**
+ * Pay gate for paid content whose detail API returns 403 when unpaid.
+ * Fetches the locked preview (title/price/entitlement only) and renders the
+ * Buy button — without this, an unpaid student sees a bare error and can
+ * never purchase. Falls back to an error box when the preview also fails.
+ */
+export function LockedPayGate({ previewPath, contentType, contentId, backHref, backLabel, onUnlocked }: {
+  previewPath: string; contentType: ContentType; contentId: string;
+  backHref: string; backLabel: string; onUnlocked: () => void;
+}) {
+  const preview = useFetch(() => apiGet<LockedPreview>(previewPath), [previewPath]);
+  // Once the preview reports entitlement (e.g. just paid), hand control back
+  // to the full detail exactly once — the detail loads for entitled users.
+  const unlockedFired = useRef(false);
+  useEffect(() => {
+    if (preview.data?.entitled && !unlockedFired.current) { unlockedFired.current = true; onUnlocked(); }
+  }, [preview.data?.entitled, onUnlocked]);
+
+  if (preview.loading) return (
+    <div>
+      <Link href={backHref} className="text-sm font-semibold text-brandstrong">← {backLabel}</Link>
+      <div className="mt-4"><Loading label="Checking access…" /></div>
+    </div>
+  );
+  if (preview.error || !preview.data) return (
+    <div>
+      <Link href={backHref} className="text-sm font-semibold text-brandstrong">← {backLabel}</Link>
+      <div className="mt-4"><ErrorBox message={preview.error ?? "Content not found."} onRetry={preview.retry} /></div>
+    </div>
+  );
+  const p = preview.data;
+  if (!(p.price > 0) || p.entitled) {
+    // Not actually locked (free, entitled, or a transient detail failure).
+    return (
+      <div>
+        <Link href={backHref} className="text-sm font-semibold text-brandstrong">← {backLabel}</Link>
+        <div className="mt-4"><ErrorBox message="Your access looks ready — reload the full content." onRetry={onUnlocked} /></div>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <Link href={backHref} className="text-sm font-semibold text-brandstrong">← {backLabel}</Link>
+      <h1 className="mt-3 font-display text-3xl font-bold">{p.title}</h1>
+      <p className="mt-1 text-sm text-muted">This is a paid {contentType} — pay once to unlock it.</p>
+      <div className="mt-4 rounded-2xl border border-line bg-card p-6">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tone="amber">{priceLabel(p.price, p.currency)} · Paid</Badge>
+        </div>
+        {!!p.description && <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-muted">{p.description}</p>}
+        <div className="mt-5 border-t border-line pt-5">
+          <BuyPanel contentType={contentType} contentId={contentId} price={p.price} currency={p.currency} />
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          {contentType !== "question" && <SaveButton targetType={contentType} targetId={contentId} />}
+          <Btn variant="ghost" onClick={() => { preview.retry(); }}>Already paid? Check again</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Engagement({ targetType, targetId }: { targetType: ContentType; targetId: string }) {
   const toast = useToast();
   const [comments, setComments] = useState<{ _id: string; authorId: string; content: string; createdAt: string }[]>([]);
   const [text, setText] = useState("");
+  const [commentError, setCommentError] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [likes, setLikes] = useState(0);
   const [dislikes, setDislikes] = useState(0);
@@ -79,7 +154,9 @@ export function Engagement({ targetType, targetId }: { targetType: ContentType; 
   useEffect(() => { void loadReactions(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [targetType, targetId]);
 
   const post = async () => {
-    if (!text.trim()) return;
+    if (!text.trim()) { setCommentError("Write a comment first — the comment box is empty."); return; }
+    if (text.trim().length > 5000) { setCommentError("Comment must be 5,000 characters or less."); return; }
+    setCommentError("");
     try {
       await apiPost("/api/v1/comments", { targetType, targetId, content: text.trim() });
       setText(""); void load(); toast("Comment posted.");
@@ -123,10 +200,11 @@ export function Engagement({ targetType, targetId }: { targetType: ContentType; 
       </div>
       <div className="mt-4 flex gap-2">
         <label className="sr-only" htmlFor={`comment-${targetId}`}>Add a comment</label>
-        <input id={`comment-${targetId}`} value={text} onChange={(e) => setText(e.target.value)} placeholder="Ask or answer something helpful…"
-          className="w-full rounded-lg border border-line bg-card px-3 py-2.5 text-sm" />
+        <input id={`comment-${targetId}`} value={text} onChange={(e) => { setText(e.target.value); if (commentError) setCommentError(""); }} placeholder="Ask or answer something helpful…"
+          aria-invalid={!!commentError} className="w-full rounded-lg border border-line bg-card px-3 py-2.5 text-sm" />
         <Btn onClick={post}>Post</Btn>
       </div>
+      <FieldError>{commentError}</FieldError>
       <div className="mt-4 space-y-3">
         {!loaded ? <p className="text-sm text-muted">Loading comments…</p> :
           comments.length === 0 ? <p className="text-sm text-muted">No comments yet. Be the first to ask a question.</p> :

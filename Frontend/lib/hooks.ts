@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { ApiError } from "./api";
+import { apiGet, ApiError } from "./api";
 
 export function useFetch<T>(loader: () => Promise<T>, deps: unknown[] = []) {
   const [data, setData] = useState<T | null>(null);
@@ -23,6 +23,27 @@ export function useFetch<T>(loader: () => Promise<T>, deps: unknown[] = []) {
   }, [...deps, nonce]);
 
   return { data, error, loading, retry: () => setNonce((n) => n + 1), setData };
+}
+
+/** Public client config served by GET /api/v1/config. Every limit and the
+ *  currency list come from the backend .env — the frontend never hardcodes
+ *  these numbers, so changing .env changes the UI with no code edits. */
+export interface PublicConfig {
+  uploadLimits: Record<"pdf" | "zip" | "video" | "image", { sizeMB: number; files: number }>;
+  currencies: string[];
+  defaultCurrency: string;
+}
+
+let configCache: PublicConfig | null = null;
+
+export function usePublicConfig() {
+  const { data, loading } = useFetch<PublicConfig>(async () => {
+    if (configCache) return configCache;
+    const c = await apiGet<PublicConfig>("/api/v1/config");
+    configCache = c;
+    return c;
+  }, []);
+  return { config: data, loading };
 }
 
 /** Returns `value` only after it stays unchanged for `delayMs`. Each new

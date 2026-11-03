@@ -2,18 +2,20 @@
 import { Suspense, use, useMemo, useState } from "react";
 import Link from "next/link";
 import { Btn, Empty, ErrorBox, Loading, useToast } from "@/components/ui";
+import { useDialog } from "@/components/AlertDialog";
 import { PlaylistCard, VideoCard } from "@/components/cards";
 import { RateDialog } from "@/components/RateDialog";
 import { AvatarImg, CoverBanner, SOCIAL_TILES, SocialTile, handleOf, joinedLabel } from "@/components/profile";
 import { apiDelete, apiGet, apiPost, ApiError, qs } from "@/lib/api";
 import { useFetch } from "@/lib/hooks";
-import type { Assignment, Exam, Page, Playlist, TeacherProfile, Video } from "@/lib/types";
+import type { Exam, Page, Playlist, TeacherProfile, Video } from "@/lib/types";
 
 const cardCls = "rounded-2xl border border-line bg-card p-5 sm:p-6";
 
 function TeacherProfileInner({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const toast = useToast();
+  const { confirm, promptReason } = useDialog();
   const teacher = useFetch(() => apiGet<TeacherProfile>(`/api/v1/teachers/${id}`), [id]);
   const follows = useFetch(() => apiGet<Page<{ teacherId: string }>>("/api/v1/follows/me?limit=100"), []);
   const blocks = useFetch(() => apiGet<Page<{ teacherId: string }>>("/api/v1/blocks/me?limit=100"), []);
@@ -23,7 +25,6 @@ function TeacherProfileInner({ params }: { params: Promise<{ id: string }> }) {
   );
   const allVideos = useFetch(() => apiGet<Page<Video>>(`/api/v1/videos${qs({ limit: 100 })}`), []);
   const allExams = useFetch(() => apiGet<Page<Exam>>(`/api/v1/exams${qs({ limit: 100 })}`), []);
-  const allAssignments = useFetch(() => apiGet<Page<Assignment>>(`/api/v1/assignments${qs({ limit: 100 })}`), []);
   const allPlaylists = useFetch(() => apiGet<Page<Playlist>>(`/api/v1/playlists${qs({ limit: 100 })}`), []);
 
   const [busy, setBusy] = useState<string | null>(null);
@@ -44,11 +45,8 @@ function TeacherProfileInner({ params }: { params: Promise<{ id: string }> }) {
       ...(allExams.data?.items ?? [])
         .filter((e) => String(e.ownerId) === id)
         .map((e) => ({ id: String(e._id), source: "exam" as const, title: e.title, kind: e.kind ?? "quiz" })),
-      ...(allAssignments.data?.items ?? [])
-        .filter((a) => String(a.ownerId) === id)
-        .map((a) => ({ id: String(a._id), source: "assignment" as const, title: a.title, kind: "project" })),
     ],
-    [allExams.data, allAssignments.data, id],
+    [allExams.data, id],
   );
   const playlists = useMemo(
     () => (allPlaylists.data?.items ?? []).filter((p) => String(p.ownerId) === id),
@@ -100,7 +98,7 @@ function TeacherProfileInner({ params }: { params: Promise<{ id: string }> }) {
         await apiDelete(`/api/v1/blocks/${id}`);
         toast("Teacher unblocked. Their content will appear again.");
       } else {
-        if (!window.confirm(`Block ${name}? Their videos, tests, and playlists will be hidden from you.`)) return;
+        if (!(await confirm({ title: `Block ${name}?`, message: "Their videos, tests, and playlists will be hidden from you.", confirmLabel: "Block", danger: true }))) return;
         await apiPost("/api/v1/blocks", { teacherId: id });
         toast("Teacher blocked. Their content is now hidden.");
       }
@@ -111,7 +109,7 @@ function TeacherProfileInner({ params }: { params: Promise<{ id: string }> }) {
   };
 
   const report = async () => {
-    const reason = window.prompt(`Why are you reporting ${name}? (at least 3 characters)`);
+    const reason = await promptReason({ title: `Report ${name}`, label: "Why are you reporting this teacher?", placeholder: "Describe the problem (at least 3 characters)…", confirmLabel: "Send report", danger: true });
     if (!reason) return;
     try {
       await apiPost("/api/v1/reports", { targetType: "teacher", targetId: id, reason });
@@ -179,7 +177,7 @@ function TeacherProfileInner({ params }: { params: Promise<{ id: string }> }) {
         <h2 className="text-[17px] font-bold">About</h2>
         <p className="mt-2 whitespace-pre-line text-[15px] leading-relaxed text-muted">{t.bio?.trim() || "No bio yet."}</p>
         <div className="mt-4 space-y-2 border-t border-line pt-4 text-[15px]">
-          <p>{t.email}</p>
+          {t.username?.trim() && <p>@{t.username}</p>}
           {t.university?.trim() && <p>{t.university}{t.degree?.trim() ? ` · ${t.degree}` : ""}</p>}
           {t.location?.trim() && <p>{t.location}</p>}
           <p className="text-muted">{joinedLabel(t.createdAt)}</p>

@@ -3,7 +3,8 @@ import { Suspense, use, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Badge, ErrorBox, Loading, useToast, Btn } from "@/components/ui";
-import { BuyPanel, Engagement } from "@/components/purchase";
+import { useDialog } from "@/components/AlertDialog";
+import { BuyPanel, Engagement, LockedPayGate } from "@/components/purchase";
 import { TestsExamsTable } from "@/components/LinkedTests";
 import { SaveButton } from "@/lib/saved";
 import { apiGet, apiPost, ApiError, qs } from "@/lib/api";
@@ -19,6 +20,7 @@ function VideoDetailInner({ params }: { params: Promise<{ id: string }> }) {
   const backLabel =
     fromParam === "home" ? "Learn with Videos" : fromParam === "saved" ? "Saved Content" : fromParam === "purchases" ? "Purchased Content" : "My Learning";
   const toast = useToast();
+  const { promptReason } = useDialog();
   const { data: v, error, loading, retry } = useFetch(() => apiGet<Video>(`/api/v1/videos/${id}`), [id]);
   const exams = useFetch(() => apiGet<Page<Exam>>(`/api/v1/exams${qs({ limit: 100 })}`), []);
   const linkedTests = useMemo(() => {
@@ -30,16 +32,17 @@ function VideoDetailInner({ params }: { params: Promise<{ id: string }> }) {
 
   if (loading) return <Loading label="Loading video…" />;
   if (error) return (
-    <div>
-      <Link href={backHref} className="text-sm font-semibold text-brandstrong">← {backLabel}</Link>
-      <div className="mt-4"><ErrorBox message={error} onRetry={retry} /></div>
-      <p className="mt-3 text-sm text-muted">If this video is paid, you may need to purchase it first. Free published videos open without payment.</p>
-    </div>
+    <LockedPayGate
+      previewPath={`/api/v1/videos/${id}/preview`}
+      contentType="video" contentId={id}
+      backHref={backHref} backLabel={backLabel}
+      onUnlocked={retry}
+    />
   );
   if (!v) return <ErrorBox message="Video not found." onRetry={retry} />;
 
   const report = async () => {
-    const reason = window.prompt("Why are you reporting this video? (at least 3 characters)");
+    const reason = await promptReason({ title: "Report this video", label: "Why are you reporting this video?", placeholder: "Describe the problem (at least 3 characters)…", confirmLabel: "Send report", danger: true });
     if (!reason) return;
     try { await apiPost("/api/v1/reports", { targetType: "video", targetId: v._id, reason }); toast("Report sent for review."); }
     catch (e) { toast(e instanceof ApiError ? e.message : "Could not send report.", "err"); }

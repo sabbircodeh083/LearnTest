@@ -1,9 +1,22 @@
 import { Router } from "express";
 import { z } from "zod";
 import { asyncHandler, ok, p, q, validate } from "../common/middleware.js";
-import { conflict, notFound } from "../common/errors.js";
+import { badRequest, conflict, notFound } from "../common/errors.js";
 import { idParam, pagination, paginate } from "../common/schemas.js";
-import { CONTENT_TYPES, Block, Bookmark, Comment, Follow, Profile, Rating, Reaction, Report } from "../models/index.js";
+import { CONTENT_TYPES, Block, Bookmark, Comment, Exam, Follow, Playlist, Profile, Question, Rating, Reaction, Report, Video } from "../models/index.js";
+
+// Engagement targets must be real content (or a real teacher profile) —
+// no rating/commenting on nonexistent or fabricated targets.
+const TARGET_MODELS: Record<string, any> = { video: Video, playlist: Playlist, question: Question, exam: Exam };
+async function assertTargetExists(targetType: string, targetId: string) {
+  if (targetType === "teacher") {
+    const prof = await Profile.findOne({ userId: targetId }).select("_id").lean();
+    if (!prof) throw notFound("Teacher not found");
+    return;
+  }
+  const Model = TARGET_MODELS[targetType];
+  if (Model && !(await Model.exists({ _id: targetId }))) throw notFound("Target not found");
+}
 import { requireRole } from "../auth/guards.js";
 import { listUserIdsByRole, roleMapForUserIds } from "../services/user-roles.js";
 
@@ -16,12 +29,9 @@ export function engagementRouter(deps: { requireAuth: any; verified: any[]; auth
     const [items, total] = await Promise.all([Comment.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(), Comment.countDocuments(filter)]);
     ok(res, { items, total });
   }));
-  r.post("/comments", requireAuth, ...verified, validate(z.object({ ...target, targetType: z.enum(CONTENT_TYPES), content: z.string().min(1).max(2000) })), asyncHandler(async (req, res) =>
-    ok(res, await Comment.create({ ...req.body, authorId: req.user!.id }), 201)));
-  r.delete("/comments/:id", requireAuth, validate(idParam, "params"), asyncHandler(async (req, res) => {
-    const c = await Comment.findById(p(req).id); if (!c) return ok(res, { deleted: false });
-    if (c.authorId !== req.user!.id && req.user!.role !== "admin") return res.status(403).json({ success: false, data: null, error: { code: "FORBIDDEN", message: "Forbidden" }, requestId: req.requestId });
-    c.moderationState = "hidden"; await c.save(); ok(res, { id: c.id, moderationState: c.moderationState });
+  r.post("/comments", requireAuth, ...verified, validate(z.object({ ...target, targetType: z.enum(CONTENT_TYPES), content: z.string().min(1).max(2000) })), asyncHandler(async (req, res) => {
+    await assertTargetExists(req.body.targetType, req.body.targetId);
+    ok(res, await Comment.create({ ...req.body, authorId: req.user!.id }), 201);
   }));
   // One reaction per user per target (unique index). Tapping the active value
   // again removes it (unlike); tapping the other value switches to it.
@@ -46,8 +56,11 @@ export function engagementRouter(deps: { requireAuth: any; verified: any[]; auth
     ]);
     ok(res, { likes, dislikes, mine: mine?.value ?? null });
   }));
-  r.post("/ratings", requireAuth, ...verified, validate(z.object({ targetType: z.enum([...CONTENT_TYPES, "teacher"]), targetId: z.string().min(1).max(100), value: z.number().min(1).max(5) })), asyncHandler(async (req, res) =>
-    ok(res, await Rating.findOneAndUpdate({ authorId: req.user!.id, targetType: req.body.targetType, targetId: req.body.targetId }, { $set: { value: req.body.value } }, { upsert: true, returnDocument: "after" }), 201)));
+  r.post("/ratings", requireAuth, ...verified, validate(z.object({ targetType: z.enum([...CONTENT_TYPES, "teacher"]), targetId: z.string().min(1).max(100), value: z.number().min(1).max(5) })), asyncHandler(async (req, res) => {
+    if (req.body.targetType === "teacher" && req.body.targetId === req.user!.id) throw badRequest("You cannot rate yourself.");
+    await assertTargetExists(req.body.targetType, req.body.targetId);
+    ok(res, await Rating.findOneAndUpdate({ authorId: req.user!.id, targetType: req.body.targetType, targetId: req.body.targetId }, { $set: { value: req.body.value } }, { upsert: true, returnDocument: "after" }), 201);
+  }));
   // Rating aggregates per content item (averages shown on the teacher dashboard).
   r.get("/ratings/summary", requireAuth, validate(z.object({ targetType: z.enum([...CONTENT_TYPES, "teacher"]), targetIds: z.string().min(1).max(2000) }), "query"), asyncHandler(async (req, res) => {
     const query = q(req);
@@ -60,6 +73,7 @@ export function engagementRouter(deps: { requireAuth: any; verified: any[]; auth
   }));
   r.post("/follows", requireAuth, ...verified, validate(z.object({ teacherId: z.string().min(1).max(100) })), asyncHandler(async (req, res) => {
     if (req.body.teacherId === req.user!.id) return res.status(400).json({ success: false, data: null, error: { code: "BAD_REQUEST", message: "Cannot follow yourself" }, requestId: req.requestId });
+    await assertTargetExists("teacher", req.body.teacherId);
     ok(res, await Follow.findOneAndUpdate({ followerId: req.user!.id, teacherId: req.body.teacherId }, {}, { upsert: true, returnDocument: "after" }), 201);
   }));
   r.delete("/follows/:id", requireAuth, validate(z.object({ id: z.string().min(1).max(100) }), "params"), asyncHandler(async (req, res) => {
@@ -154,7 +168,7 @@ export function engagementRouter(deps: { requireAuth: any; verified: any[]; auth
       if (teacherIds.length === 0) return ok(res, { items: [], total: 0, page: query.page, limit });
       filter.userId = { $in: teacherIds };
     }
-    const [profiles, total] = await Promise.all([Profile.find(filter).select("userId email name bio avatarUploadId coverUploadId username subject university degree location skills socials createdAt").sort({ createdAt: -1 }).skip(skip).limit(limit).lean(), Profile.countDocuments(filter)]);
+    const [profiles, total] = await Promise.all([Profile.find(filter).select("userId name bio avatarUploadId coverUploadId username subject university degree location skills socials createdAt").sort({ createdAt: -1 }).skip(skip).limit(limit).lean(), Profile.countDocuments(filter)]);
     const roles = await roleMapForUserIds(deps.authDb, profiles.map((p: any) => String(p.userId)));
     const items = profiles.map((p: any) => {
       const u = roles.get(String(p.userId));
@@ -172,7 +186,7 @@ export function engagementRouter(deps: { requireAuth: any; verified: any[]; auth
       if (!teacherIds.includes(teacherId)) throw notFound("Teacher not found");
     }
     const profile: any = await Profile.findOne({ userId: teacherId, status: "active" })
-      .select("userId email name bio avatarUploadId coverUploadId username subject university degree location skills socials createdAt").lean();
+      .select("userId name bio avatarUploadId coverUploadId username subject university degree location skills socials createdAt").lean();
     if (!profile) throw notFound("Teacher not found");
     const { role, ...rest } = profile;
     void role;

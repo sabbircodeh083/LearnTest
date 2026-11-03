@@ -6,14 +6,12 @@ import { PublicHeader } from "@/components/PublicHeader";
 import { Badge, Btn, Loading, Notice, statusTone } from "@/components/ui";
 import { apiGet } from "@/lib/api";
 import { fmtMoney, type Purchase } from "@/lib/types";
+import { safeReturnTo } from "@/lib/url";
 
 function ResultInner() {
   const params = useSearchParams();
   const tranId = params.get("tran_id") || "";
-  const back = (() => {
-    const r = params.get("return") || "";
-    return r.startsWith("/") && !r.startsWith("//") ? r : "";
-  })();
+  const back = safeReturnTo(params.get("return"));
   const [purchase, setPurchase] = useState<Purchase | null>(null);
   const [state, setState] = useState<"checking" | "done" | "signed-out" | "error">("checking");
   const [tries, setTries] = useState(0);

@@ -8,7 +8,7 @@ import type { Role } from "@/lib/types";
 
 export const STUDENT_NAV = [
   ["Home", "/student"], ["Videos", "/student?tab=videos"], ["Playlist", "/student?tab=playlists"], ["Tests", "/student?tab=tests"], ["My Submissions", "/student/submissions"],
-  ["Graded Submissions", "/student/graded-submissions"], ["Results & Feedback", "/student/results"], ["Saved Content", "/student/saved-content"], ["Purchased Content", "/student/purchases"],
+  ["Results & Feedback", "/student/graded-submissions"], ["Saved Content", "/student/saved-content"], ["Purchased Content", "/student/purchases"],
   ["Purchase Statements", "/student/statements"],
   ["Following Teachers", "/student/following"], ["Profile", "/student/profile"], ["Settings", "/student/settings"],
 ] as const;

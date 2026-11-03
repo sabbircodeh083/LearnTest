@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Badge, Btn, Empty, ErrorBox, Loading, statusTone } from "@/components/ui";
+import { DataList, DataRow, RowChip, RowIcon } from "@/components/DataList";
 import { apiGet, qs } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useFetch } from "@/lib/hooks";
@@ -44,7 +45,7 @@ function StatCard({ icon, label, value, sub }: { icon: React.ReactNode; label: s
       {icon}
       <div className="min-w-0">
         <p className="text-sm text-muted">{label}</p>
-        <p className="mt-1 text-[24px] font-bold leading-none tracking-tight">৳ {value}</p>
+        <p className="mt-1 text-[24px] font-bold leading-none tracking-tight">$ {value}</p>
         <p className="mt-1.5 text-[13px] text-muted">{sub}</p>
       </div>
     </div>
@@ -114,28 +115,21 @@ export default function TeacherEarningsPage() {
                 <div className="mt-3">
                   {!history.length ? <Empty title="No payouts yet" body="When the admin pays you, the payment will be recorded here with the amount, note and date." />
                     : (
-                      <div className="overflow-x-auto">
-                        <table className="w-full min-w-[560px] text-left text-sm">
-                          <thead>
-                            <tr className="text-[13px] text-muted">
-                              <th className="rounded-l-lg bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Date</th>
-                              <th className="bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Amount</th>
-                              <th className="bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Note</th>
-                              <th className="rounded-r-lg bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Recorded By</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-line">
-                            {history.map((h) => (
-                              <tr key={h.id} className="align-middle">
-                                <td className="whitespace-nowrap px-4 py-3.5 text-muted">{fmtDate(h.createdAt ?? "")}</td>
-                                <td className="whitespace-nowrap px-4 py-3.5 font-semibold">৳ {Number(h.amount ?? 0).toLocaleString()}</td>
-                                <td className="px-4 py-3.5 text-muted">{h.note || "—"}</td>
-                                <td className="whitespace-nowrap px-4 py-3.5 font-mono text-xs text-muted">{h.createdBy || "—"}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                      <DataList label="Payout history">
+                        {history.map((h) => (
+                          <DataRow
+                            key={h.id}
+                            icon={
+                              <RowIcon tone="bg-[#e8f1fe] text-[#1d6ce0]">
+                                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="6" width="18" height="13" rx="2.5" /><path d="M3 10h18" /><path d="M7 15h4" /></svg>
+                              </RowIcon>
+                            }
+                            title={`$ ${Number(h.amount ?? 0).toLocaleString()}`}
+                            meta={fmtDate(h.createdAt ?? "")}
+                            detail={[h.note || null, h.createdBy ? `Recorded by ${h.createdBy}` : null].filter(Boolean).join(" · ") || "—"}
+                          />
+                        ))}
+                      </DataList>
                     )}
                 </div>
               </section>
@@ -223,46 +217,28 @@ export default function TeacherEarningsPage() {
                   : !sales.data?.items.length ? <Empty title="No sales yet" body="When a student buys your video or test, the payment will appear here with the student, transaction and content details." />
                   : (
                     <>
-                      <div className="overflow-x-auto">
-                        <table className="w-full min-w-[960px] text-left text-sm">
-                          <thead>
-                            <tr className="text-[13px] text-muted">
-                              <th className="rounded-l-lg bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Student</th>
-                              <th className="bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Student ID</th>
-                              <th className="bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Transaction ID</th>
-                              <th className="bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Amount</th>
-                              <th className="bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Payment Status</th>
-                              <th className="bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Content</th>
-                              <th className="rounded-r-lg bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Content ID</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-line">
-                            {sales.data.items.map((s) => (
-                              <tr key={s.purchaseId} className="align-middle">
-                                <td className="px-4 py-3.5">
-                                  <p className="font-semibold">{s.student.name || "—"}</p>
-                                  <p className="text-xs text-muted">{s.student.email || "—"}</p>
-                                </td>
-                                <td className="whitespace-nowrap px-4 py-3.5 font-mono text-xs text-muted">{s.student.userId}</td>
-                                <td className="whitespace-nowrap px-4 py-3.5 font-mono text-xs">{s.tranId}</td>
-                                <td className="whitespace-nowrap px-4 py-3.5 font-semibold">৳ {Number(s.amount ?? 0).toLocaleString()}</td>
-                                <td className="whitespace-nowrap px-4 py-3.5"><Badge tone={statusTone(s.status)}>{s.status}</Badge></td>
-                                <td className="px-4 py-3.5">
-                                  <p className="line-clamp-1 font-semibold">{s.content.title || "—"}</p>
-                                  <p className="mt-0.5 text-xs capitalize text-muted">{s.content.contentType}</p>
-                                </td>
-                                <td className="whitespace-nowrap px-4 py-3.5 font-mono text-xs text-muted">{s.content.contentId}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                      <DataList label="Sales">
+                        {sales.data.items.map((s) => (
+                          <DataRow
+                            key={s.purchaseId}
+                            icon={
+                              <RowIcon tone="bg-[#e6f9ec] text-[#16a34a]">
+                                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="8" r="3.5" /><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" /></svg>
+                              </RowIcon>
+                            }
+                            title={s.student.name || s.student.email || "—"}
+                            meta={<>$ {Number(s.amount ?? 0).toLocaleString()} · <Badge tone={statusTone(s.status)}>{s.status}</Badge></>}
+                            detail={<span className="break-all">{s.content.title || "—"} ({s.content.contentType}) · {s.tranId}</span>}
+                            chip={<RowChip tone="bg-soft text-muted">{s.content.contentType}</RowChip>}
+                          />
+                        ))}
+                      </DataList>
                       <div className="mt-4 flex flex-wrap items-center gap-3">
                         <Btn variant="ghost" disabled={salesPage <= 1} onClick={() => setSalesPage((p) => p - 1)}>Previous</Btn>
                         <span className="text-sm text-muted">Page {salesPage} of {salesPages} · {sales.data.total} payments</span>
                         <Btn variant="ghost" disabled={salesPage >= salesPages} onClick={() => setSalesPage((p) => p + 1)}>Next</Btn>
                       </div>
-                      <p className="mt-2 text-xs text-muted">Only purchases of content you own are listed. Amounts were charged by the payment gateway in {sales.data.items[0]?.currency ?? "BDT"}.</p>
+                      <p className="mt-2 text-xs text-muted">Only purchases of content you own are listed. Amounts were charged by the payment gateway in {sales.data.items[0]?.currency ?? "USD"}.</p>
                     </>
                   )}
               </div>

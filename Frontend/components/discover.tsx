@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Empty, ErrorBox, Loading } from "./ui";
+import { DataList, DataRow, RowChip, RowIcon } from "./DataList";
 import { PlaylistCard } from "./cards";
 import { apiGet, qs } from "@/lib/api";
 import { useFetch } from "@/lib/hooks";
@@ -9,7 +10,8 @@ import { AvatarImg } from "./profile";
 import { SaveButton, saveKey, useSaved } from "@/lib/saved";
 import { purchaseKey, usePurchasedIds } from "@/lib/purchases";
 import { useBlockedIds } from "@/lib/blocks";
-import { fmtDate, type Assignment, type Exam, type Page, type Playlist, type Video } from "@/lib/types";
+import { fmtDate, type Exam, type Page, type Playlist, type Video } from "@/lib/types";
+import { priceLabel } from "@/lib/types";
 
 export type DiscoverMode = "videos" | "tests" | "playlists";
 
@@ -45,7 +47,7 @@ function initialsOf(name: string) {
 
 export interface TestRow {
   id: string;
-  source: "exam" | "assignment";
+  source: "exam";
   kind: string;
   title: string;
   description: string;
@@ -219,7 +221,7 @@ export function DiscoverVideos({ videoHref, nameOf, avatarOf = () => null, teach
                       </Link>
                       <span className="flex shrink-0 items-center gap-1">
                         <span className={`rounded-md px-2.5 py-1 text-[13px] font-bold ${v.price > 0 ? "bg-[#ffedd5] text-[#c2410c]" : "bg-[#dcfce7] text-[#16a34a]"}`}>
-                          {v.price > 0 ? `৳ ${v.price}` : "Free"}
+                          {priceLabel(v.price, v.currency)}
                         </span>
                         {showSave && <SaveButton targetType="video" targetId={String(v._id)} />}
                       </span>
@@ -251,21 +253,15 @@ export function PracticeTests({ testHref, nameOf, avatarOf = () => null, teacher
   const purchased = usePurchasedIds();
   const blocked = useBlockedIds();
   const exams = useFetch(() => apiGet<Page<Exam>>(`/api/v1/exams${qs({ search: debounced || undefined, limit: savedOnly || purchasedOnly ? 100 : 20 })}`), [debounced, savedOnly, purchasedOnly]);
-  const assignments = useFetch(() => apiGet<Page<Assignment>>(`/api/v1/assignments${qs({ search: debounced || undefined, limit: savedOnly || purchasedOnly ? 100 : 20 })}`), [debounced, savedOnly, purchasedOnly]);
 
   const rows = useMemo<TestRow[]>(() => {
     const list: TestRow[] = [
       ...(exams.data?.items ?? []).map((e) => ({
         id: String(e._id), source: "exam" as const, kind: e.kind ?? "quiz", title: e.title, description: e.description ?? "",
-        price: e.price ?? 0, currency: e.currency ?? "BDT",
+        price: e.price ?? 0, currency: e.currency ?? "USD",
         durationMinutes: e.kind === "project" ? null : (e.durationMinutes ?? null),
         deadline: e.kind === "project" ? (e.endsAt ?? null) : null,
         ownerId: e.ownerId, createdAt: e.createdAt,
-      })),
-      ...(assignments.data?.items ?? []).map((a) => ({
-        id: String(a._id), source: "assignment" as const, kind: "project", title: a.title, description: a.description ?? "",
-        price: a.price ?? 0, currency: a.currency ?? "BDT",
-        durationMinutes: null, deadline: a.dueAt ?? null, ownerId: a.ownerId, createdAt: a.createdAt,
       })),
     ];
     list.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
@@ -277,10 +273,10 @@ export function PracticeTests({ testHref, nameOf, avatarOf = () => null, teacher
         .sort((a, b) => +new Date(purchased.map.get(purchaseKey(b.source, b.id)) ?? "") - +new Date(purchased.map.get(purchaseKey(a.source, a.id)) ?? ""));
     }
     return mine.slice(0, savedOnly || purchasedOnly ? 100 : 8);
-  }, [exams.data, assignments.data, kind, savedOnly, purchasedOnly, saved.ids, purchased.map, blocked.ids]);
+  }, [exams.data, kind, savedOnly, purchasedOnly, saved.ids, purchased.map, blocked.ids]);
 
-  const loading = exams.loading || assignments.loading || (savedOnly && saved.loading) || (purchasedOnly && purchased.loading);
-  const error = exams.error || assignments.error;
+  const loading = exams.loading || (savedOnly && saved.loading) || (purchasedOnly && purchased.loading);
+  const error = exams.error;
 
   return (
     <section aria-label={title}>
@@ -308,56 +304,51 @@ export function PracticeTests({ testHref, nameOf, avatarOf = () => null, teacher
       </div>
       <div className="mt-4">
         {loading ? <Loading label="Loading tests…" /> :
-          error ? <ErrorBox message={error} onRetry={() => { exams.retry(); assignments.retry(); }} /> :
+          error ? <ErrorBox message={error} onRetry={() => { exams.retry(); }} /> :
           !rows.length ? (savedOnly
             ? <Empty title="No saved tests yet" body="Tap the bookmark icon on any test to keep it here for later." />
             : purchasedOnly
               ? <Empty title="No purchased tests yet" body="Paid tests you buy will appear here, recent first." />
               : <Empty title="No tests found" body="No published tests yet. Check back soon." />) : (
-            <ol className="divide-y divide-line rounded-xl border border-line bg-card">
+            <DataList label={title}>
               {rows.map((t) => {
                 const meta = KIND_META[t.kind] ?? KIND_META.quiz!;
                 const teacher = nameOf(t.ownerId);
                 const href = testHref(t);
                 const finalHref = from ? `${href}${href.includes("?") ? "&" : "?"}from=${from}` : href;
                 return (
-                  <li key={`${t.kind}-${t.id}`} className="flex flex-row flex-wrap items-center gap-3 p-4 lg:gap-5">
-                    <div className="flex min-w-[200px] flex-1 items-start gap-3">
-                      <span aria-hidden className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${meta.box}`}>{meta.icon}</span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-bold">{t.title}</span>
-                        <span className="mt-0.5 block truncate text-sm text-muted">
-                          {t.description ? (t.description.length > 70 ? `${t.description.slice(0, 70).trimEnd()}…` : t.description) : "No description."}
+                  <DataRow
+                    key={`${t.kind}-${t.id}`}
+                    icon={<RowIcon tone={meta.box}>{meta.icon}</RowIcon>}
+                    title={t.title}
+                    meta={t.description ? (t.description.length > 70 ? `${t.description.slice(0, 70).trimEnd()}…` : t.description) : "No description."}
+                    detail={t.durationMinutes !== null ? `${t.durationMinutes} minutes` : t.deadline ? `Due ${fmtDate(t.deadline)}` : "Project based"}
+                    chip={<RowChip tone={meta.badge}>{meta.label}</RowChip>}
+                    actions={
+                      <>
+                        <Link href={teacherHref(t.ownerId)} className="flex min-w-0 items-center gap-2 hover:text-brandstrong" aria-label={`View ${teacher}'s profile`}>
+                          <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-soft text-xs font-bold">
+                            {avatarOf(t.ownerId) ? (
+                              <AvatarImg uploadId={avatarOf(t.ownerId)} name={teacher} className="h-full w-full" />
+                            ) : (
+                              initialsOf(teacher)
+                            )}
+                          </span>
+                          <span className="block max-w-[120px] truncate text-[13px] font-semibold sm:max-w-[200px]">{teacher}</span>
+                        </Link>
+                        <span className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-[13px] font-bold ${t.price > 0 ? "bg-[#ffedd5] text-[#c2410c]" : "bg-[#dcfce7] text-[#16a34a]"}`}>
+                          {priceLabel(t.price, t.currency)}
                         </span>
-                        <span className="mt-0.5 block text-[13px] text-muted">
-                          {t.durationMinutes !== null ? `${t.durationMinutes} minutes` : t.deadline ? `Due ${fmtDate(t.deadline)}` : "Project based"}
+                        <span className="flex shrink-0 items-center gap-1">
+                          {showSave && <SaveButton targetType={t.source} targetId={t.id} />}
+                          <Link href={finalHref} className="whitespace-nowrap rounded-lg bg-[#16a34a] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#15803d]">{actionLabel}</Link>
                         </span>
-                      </span>
-                      <span className="shrink-0 self-center"><span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-bold ${meta.badge}`}>{meta.label}</span></span>
-                    </div>
-                    <div className="ml-auto flex shrink-0 items-center gap-4">
-                      <Link href={teacherHref(t.ownerId)} className="flex items-center gap-2.5 hover:text-brandstrong" aria-label={`View ${teacher}'s profile`}>
-                        <span aria-hidden className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-soft text-xs font-bold">
-                          {avatarOf(t.ownerId) ? (
-                            <AvatarImg uploadId={avatarOf(t.ownerId)} name={teacher} className="h-full w-full" />
-                          ) : (
-                            initialsOf(teacher)
-                          )}
-                        </span>
-                        <span className="block whitespace-nowrap text-[13px] font-semibold">{teacher}</span>
-                      </Link>
-                      <span className={`rounded-md px-2.5 py-1 text-[13px] font-bold ${t.price > 0 ? "bg-[#ffedd5] text-[#c2410c]" : "bg-[#dcfce7] text-[#16a34a]"}`}>
-                        {t.price > 0 ? `৳ ${t.price}` : "Free"}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        {showSave && <SaveButton targetType={t.source} targetId={t.id} />}
-                        <Link href={finalHref} className="rounded-lg bg-[#16a34a] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#15803d]">{actionLabel}</Link>
-                      </span>
-                    </div>
-                  </li>
+                      </>
+                    }
+                  />
                 );
               })}
-            </ol>
+            </DataList>
           )}
       </div>
     </section>

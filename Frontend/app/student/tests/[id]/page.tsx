@@ -7,10 +7,12 @@ import { startCheckout } from "@/components/purchase";
 import { SaveButton } from "@/lib/saved";
 import { AvatarImg } from "@/components/profile";
 import { apiGet, apiPost, ApiError, qs } from "@/lib/api";
+import { safeExternalUrl } from "@/lib/url";
+import { ModalShell } from "@/components/AlertDialog";
 import { useFetch } from "@/lib/hooks";
 import {
+  currencySymbol,
   fmtDate,
-  type Assignment,
   type ExamAttempt,
   type Page,
 } from "@/lib/types";
@@ -316,9 +318,9 @@ function ExamPreviewView({
                       <p className="min-w-0 flex-1 truncate text-sm font-bold">
                         {p.title}
                       </p>
-                      {p.url && (
+                      {safeExternalUrl(p.url) && (
                         <a
-                          href={p.url}
+                          href={safeExternalUrl(p.url) ?? "#"}
                           target="_blank"
                           rel="noreferrer"
                           className="inline-flex shrink-0 items-center gap-1 rounded-md bg-[#1d6ce0] px-2.5 py-1.5 text-xs font-semibold text-white hover:brightness-110"
@@ -395,7 +397,7 @@ function ExamPreviewView({
                 <p className="font-bold">{preview.title}</p>
                 {paid && (
                   <span className="shrink-0 rounded-md bg-[#dcfce7] px-2 py-0.5 text-sm font-bold text-[#16a34a]">
-                    ৳ {preview.price}
+                    {currencySymbol(preview.currency)} {preview.price}
                   </span>
                 )}
               </div>
@@ -433,7 +435,7 @@ function ExamPreviewView({
                   >
                     {busy === "pay"
                       ? "Starting checkout…"
-                      : `Pay ৳ ${preview.price}`}
+                      : `Pay ${currencySymbol(preview.currency)} ${preview.price}`}
                   </button>
                 </div>
               )}
@@ -444,7 +446,7 @@ function ExamPreviewView({
                 <p className="font-bold">{preview.title}</p>
                 {paid && (
                   <span className="shrink-0 rounded-md bg-[#dcfce7] px-2 py-0.5 text-sm font-bold text-[#16a34a]">
-                    ৳ {preview.price}
+                    {currencySymbol(preview.currency)} {preview.price}
                   </span>
                 )}
               </div>
@@ -491,7 +493,7 @@ function ExamPreviewView({
                     className="rounded-xl border border-line bg-soft px-4 py-3 text-center text-sm font-semibold text-muted"
                   >
                     You have used all {preview.maxAttempts} attempt
-                    {preview.maxAttempts === 1 ? "" : "s"}. Check Graded Submissions
+                    {preview.maxAttempts === 1 ? "" : "s"}. Check Results & Feedback
                     for your result.
                   </p>
                 ) : (
@@ -517,7 +519,7 @@ function ExamPreviewView({
                   >
                     {busy === "pay"
                       ? "Starting checkout…"
-                      : `Pay ৳ ${preview.price}`}
+                      : `Pay ${currencySymbol(preview.currency)} ${preview.price}`}
                   </button>
                 )}
               </div>
@@ -528,21 +530,10 @@ function ExamPreviewView({
 
       {/* paid alert */}
       {payAlert && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          role="alertdialog"
-          aria-modal="true"
-          aria-label="Paid test"
-        >
-          <button
-            aria-label="Close"
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setPayAlert(false)}
-          />
-          <div className="relative w-full max-w-md rounded-2xl border border-line bg-card p-6 shadow-xl">
+        <ModalShell label="Paid test" onClose={() => setPayAlert(false)}>
             <h2 className="text-lg font-bold">This is a paid test</h2>
             <p className="mt-1 text-sm text-muted">
-              “{preview.title}” costs ৳ {preview.price}. Pay first to unlock
+              “{preview.title}” costs {currencySymbol(preview.currency)} {preview.price}. Pay first to unlock
               {preview.maxAttempts == null ? (
                 <> unlimited attempts (No bound).</>
               ) : (
@@ -574,157 +565,7 @@ function ExamPreviewView({
                 {busy === "pay" ? "Starting checkout…" : "Pay First"}
               </button>
             </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
-
-function AssignmentPreviewView({
-  assignment,
-  returnTo,
-  fromParam,
-  playlistId,
-  vParam,
-}: {
-  assignment: Assignment;
-  returnTo: string;
-  fromParam: string | null;
-  playlistId?: string | null;
-  vParam?: string | null;
-}) {
-  void returnTo;
-  const toast = useToast();
-  const [payAlert, setPayAlert] = useState(false);
-  const [entitled, setEntitled] = useState<boolean | null>(
-    assignment.price > 0 ? null : true,
-  );
-  const [busy, setBusy] = useState(false);
-  useFetch(async () => {
-    if (assignment.price <= 0) return null;
-    try {
-      const d = await apiGet<{ entitled: boolean }>(
-        `/api/v1/entitlements/assignment/${assignment._id}`,
-      );
-      setEntitled(d.entitled);
-    } catch {
-      setEntitled(false);
-    }
-    return null;
-  }, [assignment._id, assignment.price]);
-
-  const attempt = () => {
-    if (assignment.price > 0 && !entitled) {
-      setPayAlert(true);
-      return;
-    }
-    const suffix = fromParam === "playlist" && playlistId
-      ? `?from=playlist&playlistId=${encodeURIComponent(playlistId)}${vParam ? `&v=${encodeURIComponent(vParam)}` : ""}`
-      : fromParam ? `?from=${fromParam}` : "";
-    window.location.href = `/student/assignments/${assignment._id}${suffix}`;
-  };
-  const payFirst = async () => {
-    setBusy(true);
-    try {
-      const gatewayUrl = await startCheckout(
-        "assignment",
-        assignment._id,
-        returnTo,
-      );
-      if (gatewayUrl) {
-        toast("Taking you to SSLCOMMERZ to complete payment…");
-        window.location.href = gatewayUrl;
-      } else {
-        toast(
-          "A pending order was created. Payment gateway credentials are not configured yet.",
-          "err",
-        );
-      }
-    } catch (e) {
-      toast(
-        e instanceof ApiError ? e.message : "Could not start payment.",
-        "err",
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <>
-      <div className="flex items-start gap-3">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-[26px] font-bold tracking-tight">
-            {assignment.title}
-          </h1>
-        </div>
-        <span className="shrink-0"><SaveButton targetType="assignment" targetId={String(assignment._id)} /></span>
-      </div>
-      <p className="mt-1 whitespace-pre-line text-sm text-muted">
-        {assignment.description || "No instructions."}
-      </p>
-      <div className="mt-4 flex flex-wrap gap-2">
-        {assignment.price > 0 && entitled && (
-          <span className="rounded-md bg-[#dcfce7] px-2.5 py-1 text-[13px] font-bold text-[#16a34a]">
-            Purchased
-          </span>
-        )}
-        <button
-          type="button"
-          onClick={attempt}
-          className="rounded-xl bg-[#16a34a] px-6 py-3 text-sm font-semibold text-white hover:bg-[#15803d]"
-        >
-          ➤ Attempt Test
-        </button>
-        {assignment.price > 0 && !entitled && (
-          <button
-            type="button"
-            onClick={() => void payFirst()}
-            disabled={busy}
-            className="rounded-xl border border-[#1d6ce0] px-6 py-3 text-sm font-semibold text-[#1d6ce0] hover:bg-[#eff6ff] disabled:opacity-50"
-          >
-            {busy ? "Starting checkout…" : `Pay ৳ ${assignment.price}`}
-          </button>
-        )}
-      </div>
-      {payAlert && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          role="alertdialog"
-          aria-modal="true"
-          aria-label="Paid test"
-        >
-          <button
-            aria-label="Close"
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setPayAlert(false)}
-          />
-          <div className="relative w-full max-w-md rounded-2xl border border-line bg-card p-6 shadow-xl">
-            <h2 className="text-lg font-bold">This is a paid test</h2>
-            <p className="mt-1 text-sm text-muted">
-              “{assignment.title}” costs ৳ {assignment.price}. Pay first to
-              unlock it.
-            </p>
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setPayAlert(false)}
-                className="rounded-xl border border-line px-5 py-2.5 text-sm font-semibold hover:bg-soft"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => void payFirst()}
-                disabled={busy}
-                className="rounded-xl bg-[#16a34a] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#15803d] disabled:opacity-50"
-              >
-                {busy ? "Starting checkout…" : "Pay First"}
-              </button>
-            </div>
-          </div>
-        </div>
+        </ModalShell>
       )}
     </>
   );
@@ -734,7 +575,6 @@ function PreviewInner() {
   const params = useParams<{ id: string }>();
   const search = useSearchParams();
   const id = decodeURIComponent(String(params.id));
-  const source = search.get("source") === "assignment" ? "assignment" : "exam";
   const fromParam = search.get("from");
   const playlistId = search.get("playlistId");
   const vParam = search.get("v");
@@ -746,22 +586,9 @@ function PreviewInner() {
     fromParam === "playlist" ? "Playlist"
     : fromParam === "saved" ? "Saved Content" : fromParam === "purchases" ? "Purchased Content" : fromParam === "home" ? "Practice with Tests" : "Tests";
   const playlistSuffix = fromParam === "playlist" && playlistId ? `&from=playlist&playlistId=${encodeURIComponent(playlistId)}${vParam ? `&v=${encodeURIComponent(vParam)}` : ""}` : "";
-  const returnTo = `/student/tests/${encodeURIComponent(id)}?source=${source}${fromParam === "saved" ? "&from=saved" : fromParam === "purchases" ? "&from=purchases" : fromParam === "home" ? "&from=home" : ""}${playlistSuffix || (fromParam !== "saved" && fromParam !== "purchases" && fromParam !== "home" && fromParam !== "playlist" ? "&from=tests" : "")}`;
+  const returnTo = `/student/tests/${encodeURIComponent(id)}?${fromParam === "saved" ? "from=saved" : fromParam === "purchases" ? "from=purchases" : fromParam === "home" ? "from=home" : ""}${playlistSuffix || (fromParam !== "saved" && fromParam !== "purchases" && fromParam !== "home" && fromParam !== "playlist" ? "from=tests" : "")}`;
 
-  const examPreview = useFetch(
-    () =>
-      source === "exam"
-        ? apiGet<ExamPreview>(`/api/v1/exams/${id}/preview`)
-        : Promise.resolve(null as unknown as ExamPreview),
-    [id, source],
-  );
-  const assignment = useFetch(
-    () =>
-      source === "assignment"
-        ? apiGet<Assignment>(`/api/v1/assignments/${id}`)
-        : Promise.resolve(null as unknown as Assignment),
-    [id, source],
-  );
+  const examPreview = useFetch(() => apiGet<ExamPreview>(`/api/v1/exams/${id}/preview`), [id]);
   const teachers = useFetch(
     () =>
       apiGet<Page<{ userId: string; name: string; avatarUploadId: string | null }>>(
@@ -774,12 +601,9 @@ function PreviewInner() {
     return { name: t?.name || "Teacher", avatarUploadId: t?.avatarUploadId ?? null };
   };
 
-  const loading = source === "exam" ? examPreview.loading : assignment.loading;
-  const error = source === "exam" ? examPreview.error : assignment.error;
-  const retry = () => {
-    examPreview.retry();
-    assignment.retry();
-  };
+  const loading = examPreview.loading;
+  const error = examPreview.error;
+  const retry = () => examPreview.retry();
 
   return (
     <div className="-m-4 bg-[#f7f9fc] p-4 dark:bg-bg sm:-m-6 sm:p-6 lg:-m-8 lg:p-8">
@@ -791,19 +615,11 @@ function PreviewInner() {
           <Loading label="Loading test…" />
         ) : error ? (
           <ErrorBox message={error} onRetry={retry} />
-        ) : source === "exam" && examPreview.data ? (
+        ) : examPreview.data ? (
           <ExamPreviewView
             preview={examPreview.data}
             teacher={teacherOf(examPreview.data.ownerId)}
             returnTo={returnTo}
-          />
-        ) : source === "assignment" && assignment.data ? (
-          <AssignmentPreviewView
-            assignment={assignment.data}
-            returnTo={returnTo}
-            fromParam={fromParam}
-            playlistId={playlistId}
-            vParam={vParam}
           />
         ) : (
           <Empty

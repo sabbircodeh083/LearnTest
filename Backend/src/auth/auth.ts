@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto";
 import { betterAuth } from "better-auth";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
 import bcrypt from "bcrypt";
@@ -20,7 +21,10 @@ export function createAuth(db: Db) {
   return betterAuth({
     appName: "LearnTest",
     baseURL: env.BETTER_AUTH_URL,
-    secret: env.BETTER_AUTH_SECRET || "dev-only-secret-change-me-32-chars-minimum",
+    // Never sign sessions with a known/published secret. Production requires
+    // BETTER_AUTH_SECRET (env validation enforces it); outside production a
+    // per-process ephemeral secret is generated instead of a fallback value.
+    secret: env.BETTER_AUTH_SECRET ?? randomBytes(32).toString("hex"),
     trustedOrigins,
     database: mongodbAdapter(db),
     emailAndPassword: {
@@ -36,7 +40,7 @@ export function createAuth(db: Db) {
       sendVerificationEmail: async ({ user, url }: any) => { await sendAuthEmail(user.email, "Verify your LearnTest email", url); },
     },
     socialProviders: social as any,
-    session: { expiresIn: 60 * 60 * 24 * 7, updateAge: 60 * 60 * 24, cookieCache: { enabled: true, maxAge: 300 } },
+    session: { expiresIn: 60 * 60 * 24 * 7, updateAge: 60 * 60 * 24, cookieCache: { enabled: true, maxAge: 60 } },
     advanced: { useSecureCookies: env.NODE_ENV === "production", defaultCookieAttributes: { httpOnly: true, secure: env.NODE_ENV === "production", sameSite: env.NODE_ENV === "production" ? "none" : "lax" } },
     user: {
       additionalFields: {

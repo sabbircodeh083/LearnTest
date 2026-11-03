@@ -3,6 +3,8 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Badge, Btn, Empty, ErrorBox, inputCls, Loading, PageHead, statusTone, useToast } from "@/components/ui";
+import { useDialog } from "@/components/AlertDialog";
+import { DataList, DataRow, RowIcon } from "@/components/DataList";
 import { apiGet, apiPatch, ApiError, qs } from "@/lib/api";
 import { useFetch } from "@/lib/hooks";
 import { fmtDate, type Page } from "@/lib/types";
@@ -12,6 +14,7 @@ interface AdminUser { userId: string; email: string; name: string; role: string;
 function UsersInner() {
   const params = useSearchParams();
   const toast = useToast();
+  const { promptReason } = useDialog();
   const [search, setSearch] = useState("");
   const [submitted, setSubmitted] = useState("");
   const [role, setRole] = useState(params.get("role") ?? "");
@@ -25,16 +28,16 @@ function UsersInner() {
 
   const changeRole = async (u: AdminUser) => {
     const next = u.role === "student" ? "teacher" : "student";
-    const reason = window.prompt(`Change ${u.email} from ${u.role} to ${next}? A reason is required (min 3 characters).`);
-    if (!reason || reason.trim().length < 3) { if (reason !== null) toast("A reason of at least 3 characters is required.", "err"); return; }
-    try { await apiPatch(`/api/v1/admin/users/${u.userId}/role`, { role: next, reason: reason.trim() }); toast("Role updated."); retry(); }
+    const reason = await promptReason({ title: `Change ${u.email} to ${next}?`, label: "Reason (required, at least 3 characters)", confirmLabel: "Change role" });
+    if (!reason) return;
+    try { await apiPatch(`/api/v1/admin/users/${u.userId}/role`, { role: next, reason }); toast("Role updated."); retry(); }
     catch (e) { toast(e instanceof ApiError ? e.message : "Could not change role.", "err"); }
   };
   const toggleStatus = async (u: AdminUser) => {
     const next = u.status === "active" ? "suspended" : "active";
-    const reason = window.prompt(`${next === "suspended" ? "Suspend" : "Reactivate"} ${u.email}? A reason is required.`);
-    if (!reason || reason.trim().length < 3) { if (reason !== null) toast("A reason of at least 3 characters is required.", "err"); return; }
-    try { await apiPatch(`/api/v1/admin/users/${u.userId}/status`, { status: next, reason: reason.trim() }); toast("Status updated."); retry(); }
+    const reason = await promptReason({ title: `${next === "suspended" ? "Suspend" : "Reactivate"} ${u.email}?`, label: "Reason (required, at least 3 characters)", confirmLabel: next === "suspended" ? "Suspend" : "Reactivate", danger: next === "suspended" });
+    if (!reason) return;
+    try { await apiPatch(`/api/v1/admin/users/${u.userId}/status`, { status: next, reason }); toast("Status updated."); retry(); }
     catch (e) { toast(e instanceof ApiError ? e.message : "Could not update status.", "err"); }
   };
 
@@ -56,19 +59,20 @@ function UsersInner() {
       {loading ? <Loading label="Loading users…" /> : error ? <ErrorBox message={error} onRetry={retry} /> :
         !data?.items.length ? <Empty title="No users found" body="No accounts match this filter." /> : (
           <>
-            <div className="overflow-x-auto rounded-xl border border-line">
-              <table className="w-full min-w-[760px] text-left text-sm">
-                <thead className="bg-soft text-xs uppercase tracking-wide text-muted">
-                  <tr><th className="px-4 py-3">User</th><th className="px-4 py-3">Role</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Joined</th><th className="px-4 py-3 text-right">Actions</th></tr>
-                </thead>
-                <tbody>
-                  {data.items.map((u) => (
-                    <tr key={u.userId} className="border-t border-line">
-                      <td className="px-4 py-3"><p className="font-medium">{u.name || "—"}</p><p className="text-xs text-muted">{u.email}</p></td>
-                      <td className="px-4 py-3 capitalize">{u.role}</td>
-                      <td className="px-4 py-3"><Badge tone={statusTone(u.status)}>{u.status}</Badge></td>
-                      <td className="px-4 py-3 text-muted">{fmtDate(u.createdAt)}</td>
-                      <td className="px-4 py-3 text-right">
+            <DataList label="Users">
+              {data.items.map((u) => (
+                <DataRow
+                  key={u.userId}
+                  icon={
+                    <RowIcon tone="bg-soft text-muted">
+                      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round"><circle cx="12" cy="8" r="3.5" /><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6" /></svg>
+                    </RowIcon>
+                  }
+                  title={u.name || u.email}
+                  meta={<>Joined {fmtDate(u.createdAt)} · <Badge tone={statusTone(u.status)}>{u.status}</Badge></>}
+                  detail={u.name ? u.email : null}
+                  chip={<span className="inline-flex rounded-md bg-soft px-2.5 py-1 text-xs font-bold capitalize text-muted">{u.role}</span>}
+                  actions={
                         <div className="relative inline-block text-left">
                           <button type="button" aria-label={`Actions for ${u.name || u.email}`} aria-expanded={menuId === u.userId} aria-haspopup="menu"
                             onClick={(e) => {
@@ -109,12 +113,10 @@ function UsersInner() {
                             </>
                           )}
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  }
+                />
+              ))}
+            </DataList>
             <div className="mt-5 flex items-center gap-3">
               <Btn variant="ghost" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Btn>
               <span className="text-sm text-muted">Page {page} of {pages} · {data.total} users</span>

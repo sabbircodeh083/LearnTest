@@ -4,13 +4,14 @@ import { z } from "zod";
 import { env } from "../../config/env.js";
 import { asyncHandler, ok, q, validate } from "../../common/middleware.js";
 import { pagination, paginate } from "../../common/schemas.js";
-import { badRequest, forbidden, notFound } from "../../common/errors.js";
+import { badRequest, conflict, notFound } from "../../common/errors.js";
 import { requireRole } from "../../auth/guards.js";
-import { CONTENT_TYPES, Entitlement, PaymentEvent, Payout, Playlist, Profile, Purchase, Question, Exam, Assignment, Video } from "../../models/index.js";
+import { CONTENT_TYPES, Entitlement, PaymentEvent, Payout, Playlist, Profile, Purchase, Question, Exam, Video } from "../../models/index.js";
 import { evaluateValidation, canTransition } from "./payment-state.js";
+import { toMinor, fromMinor, formatForGateway } from "./money.js";
 import { logger } from "../../common/logger.js";
 
-const MODELS: Record<string, any> = { video: Video, playlist: Playlist, question: Question, exam: Exam, assignment: Assignment };
+const MODELS: Record<string, any> = { video: Video, playlist: Playlist, question: Question, exam: Exam };
 
 async function fetchWithTimeout(url: string, init: RequestInit, ms = 15000): Promise<any> {
   const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), ms);
@@ -24,7 +25,7 @@ export const sslcommerz = {
   async initiate(order: any, user: any, returnTo = ""): Promise<any> {
     const body = new URLSearchParams({
       store_id: env.SSLCOMMERZ_STORE_ID, store_passwd: env.SSLCOMMERZ_STORE_PASSWORD,
-      total_amount: String(order.amount), currency: order.currency, tran_id: order.tranId,
+      total_amount: formatForGateway(order.amount), currency: order.currency, tran_id: order.tranId,
       success_url: `${env.API_BASE_URL}/api/v1/payments/sslcommerz/success`, fail_url: `${env.API_BASE_URL}/api/v1/payments/sslcommerz/fail`,
       cancel_url: `${env.API_BASE_URL}/api/v1/payments/sslcommerz/cancel`, ipn_url: env.SSLCOMMERZ_IPN_URL,
       product_name: `${order.contentType}:${order.contentId}`, product_category: "digital", product_profile: "non-physical-goods",
@@ -54,7 +55,7 @@ export async function settleFromValidation(tranId: string, valId: string, source
   if (order.status === "paid") return { outcome: "already_paid" as const, order }; // duplicate IPN: no duplicate entitlement
   const validated = await sslcommerz.validate(valId);
   const { decision, reason } = evaluateValidation(order, validated ?? {});
-  logger.info({ tranId, decision, reason, source }, "payment validation evaluated"); // no credentials / card data logged
+  logger.info({ tranId, decision, reason, source, orderAmount: order.amount, orderCurrency: order.currency, orderMinor: toMinor(order.amount), gatewayAmount: validated?.amount, gatewayMinor: toMinor(validated?.amount), gatewayStatus: validated?.status, gatewayCurrency: validated?.currency, gatewayCurrencyType: validated?.currency_type, gatewayCurrencyAmount: validated?.currency_amount, gatewayRate: validated?.currency_rate }, "payment validation evaluated"); // no credentials / card data logged
   if (decision === "paid") {
     if (!canTransition(order.status, "paid")) return { outcome: "invalid_transition" as const, order };
     const updated = await Purchase.findOneAndUpdate(
@@ -78,12 +79,24 @@ export function paymentsRouter(deps: { requireAuth: any; verified: any[] }) {
   const r = Router(); const { requireAuth, verified } = deps;
   r.post("/initiate", requireAuth, ...verified, validate(z.object({ contentType: z.enum(CONTENT_TYPES), contentId: z.string().min(1).max(100), returnTo: z.string().max(500).optional() })), asyncHandler(async (req, res) => {
     const Model = MODELS[req.body.contentType]; const doc: any = await Model.findById(req.body.contentId);
-    if (!doc || doc.status !== "published") throw notFound("Content not found");
+    if (!doc || doc.status !== "published" || doc.visibility === "private") throw notFound("Content not found");
     if (!doc.price || doc.price <= 0) throw badRequest("Content is free; no purchase needed");
     if (await Entitlement.exists({ userId: req.user!.id, contentType: req.body.contentType, contentId: req.body.contentId, active: true })) throw badRequest("Already entitled");
+    // Duplicate-initiation guard: one live pending order per user + content.
+    // Stale pending orders (abandoned checkouts) are expired so the student
+    // can retry, while a fresh one blocks a double charge.
+    const staleBefore = new Date(Date.now() - 30 * 60000);
+    const pending: any[] = await Purchase.find({ userId: req.user!.id, contentType: req.body.contentType, contentId: req.body.contentId, status: "pending" }).select("createdAt").lean();
+    if (pending.some((o: any) => new Date(o.createdAt).getTime() >= staleBefore.getTime()))
+      throw conflict("A payment for this content is already in progress. Complete it or wait a few minutes and retry.");
+    if (pending.length)
+      await Purchase.updateMany({ _id: { $in: pending.map((o: any) => o._id) } }, { $set: { status: "expired" }, $push: { statusHistory: { status: "expired", source: "superseded" } } });
     const tranId = `LT-${Date.now()}-${randomUUID().slice(0, 8)}`;
     // Amount/currency come ONLY from the stored content record — never from the client.
-    const order = await Purchase.create({ userId: req.user!.id, contentType: req.body.contentType, contentId: req.body.contentId, amount: doc.price, currency: doc.currency || env.PAYMENT_CURRENCY, tranId, statusHistory: [{ status: "pending", source: "initiate" }] });
+    // Normalized to paisa (2dp) so initiate + validation compare the same integer.
+    const minor = toMinor(doc.price);
+    if (minor === null || minor <= 0) throw badRequest("Content is free; no purchase needed");
+    const order = await Purchase.create({ userId: req.user!.id, contentType: req.body.contentType, contentId: req.body.contentId, amount: fromMinor(minor), currency: doc.currency || env.PAYMENT_CURRENCY, tranId, statusHistory: [{ status: "pending", source: "initiate" }] });
     if (!env.SSLCOMMERZ_STORE_ID) { ok(res, { purchaseId: order.id, tranId, gatewayUrl: null, note: "SSLCOMMERZ credentials not configured; pending order created (sandbox setup required)" }); return; }
     const returnTo = sanitizeReturnTo(req.body.returnTo);
     const gw = await sslcommerz.initiate(order, req.user, returnTo).catch((e) => { logger.error({ paymentError: (e as Error).message, tranId }, "gateway initiate failed"); return null; });
@@ -102,12 +115,10 @@ export function paymentsRouter(deps: { requireAuth: any; verified: any[] }) {
     const payloadHash = createHash("sha256").update(JSON.stringify(body)).digest("hex");
     const idempotencyKey = `${tranId}:${valId || payloadHash.slice(0, 16)}:${source}`;
     const dup = await PaymentEvent.findOneAndUpdate({ idempotencyKey }, { $setOnInsert: { tranId, payloadHash, processingState: "received" } }, { upsert: true, returnDocument: "before" }).catch(() => null);
-    // Browser success/fail/cancel NEVER grants access by itself — only validated IPN/settlement does.
-    if (source !== "ipn" && source !== "success") {
-      const order: any = await Purchase.findOne({ tranId });
-      if (order && source === "fail" && order.status === "pending") { order.status = "failed"; order.statusHistory.push({ status: "failed", source }); await order.save(); }
-      if (order && source === "cancel" && order.status === "pending") { order.status = "cancelled"; order.statusHistory.push({ status: "cancelled", source }); await order.save(); }
-    }
+    // Browser success/fail/cancel callbacks are UNSIGNED and unauthenticated:
+    // they never change order state (a forged fail/cancel must not be able to
+    // kill a real payment). Order state moves only through server-validated
+    // settlement (val_id) below; abandoned orders expire at re-initiation.
     if (valId && (source === "ipn" || source === "success")) {
       const result = await settleFromValidation(tranId, valId, source);
       await PaymentEvent.updateOne({ idempotencyKey }, { processingState: result.outcome === "paid" || result.outcome === "already_paid" ? "validated" : "rejected" }).catch(() => undefined);
@@ -277,11 +288,11 @@ export function purchasesRouter(deps: { requireAuth: any; verified?: any[]; auth
         totalEarned: round(totalEarned),
         totalPaidOut: round(totalPaidOut),
         duePayout: round(totalEarned - totalPaidOut),
-        currency: "BDT",
+        currency: "USD",
         salesCount,
         monthly,
         history: history.map((p: any) => ({
-          id: String(p._id), amount: p.amount, currency: p.currency ?? "BDT",
+          id: String(p._id), amount: p.amount, currency: p.currency ?? "USD",
           note: p.note ?? "", createdBy: p.createdBy, createdAt: p.createdAt ?? null,
         })),
       });
@@ -306,7 +317,7 @@ export function purchasesRouter(deps: { requireAuth: any; verified?: any[]; auth
       const dbTypeFilter: any = type === "video" || type === "playlist" || type === "question"
         ? { contentType: type }
         : kindFilter
-          ? { contentType: { $in: kindFilter === "project" ? ["exam", "assignment"] : ["exam"] } }
+          ? { contentType: "exam" }
           : {};
       const orders: any[] = await Purchase.find({ userId: req.user!.id, ...dbTypeFilter })
         .sort({ createdAt: -1 }).lean().catch(() => []);
@@ -324,7 +335,7 @@ export function purchasesRouter(deps: { requireAuth: any; verified?: any[]; auth
         for (const d of docs) meta.set(`${ctype}:${String(d._id)}`, {
           title: String(d.title ?? ""),
           teacherId: String(d.ownerId ?? ""),
-          kind: ctype === "assignment" ? "project" : String(d.kind ?? (ctype === "exam" ? "quiz" : "")),
+          kind: String(d.kind ?? (ctype === "exam" ? "quiz" : "")),
         });
       }));
       const search = String(query.search ?? "").trim().toLowerCase();
@@ -342,7 +353,7 @@ export function purchasesRouter(deps: { requireAuth: any; verified?: any[]; auth
           purchaseId: String(o._id),
           tranId: o.tranId,
           amount: o.amount,
-          currency: o.currency ?? "BDT",
+          currency: o.currency ?? "USD",
           status: o.status,
           createdAt: o.createdAt ?? null,
           studentId: String(o.userId),
@@ -357,12 +368,6 @@ export function purchasesRouter(deps: { requireAuth: any; verified?: any[]; auth
       });
       ok(res, { items, total, page: query.page, limit });
     }));
-  r.get("/:purchaseId", requireAuth, validate(z.object({ purchaseId: z.string().min(1).max(100) }), "params"), asyncHandler(async (req, res) => {
-    const doc: any = await Purchase.findById((req as any).validated_params?.purchaseId ?? req.params.purchaseId);
-    if (!doc) throw notFound();
-    if (doc.userId !== req.user!.id && req.user!.role !== "admin") throw forbidden();
-    ok(res, doc);
-  }));
   return r;
 }
 export function entitlementsRouter(deps: { requireAuth: any }) {

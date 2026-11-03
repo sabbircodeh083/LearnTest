@@ -64,11 +64,23 @@ const schema = z.object({
     .string()
     .url()
     .default("http://localhost:3000/payment/result"),
-  PAYMENT_CURRENCY: z.string().length(3).default("BDT"),
+  PAYMENT_CURRENCY: z.preprocess(
+    (v) => String(v ?? "USD").split(",")[0]!.trim().toUpperCase(),
+    z.string().length(3).default("USD"),
+  ),
   UPLOAD_STORAGE: z.enum(["local", "s3"]).default("local"),
   UPLOAD_DIR: z.string().default("./private-uploads"),
-  MAX_UPLOAD_SIZE_MB: z.coerce.number().positive().max(100).default(10),
-  MAX_UPLOAD_FILES: z.coerce.number().int().min(1).max(10).default(3),
+  // Per-type upload limits (MB per file, files per request).
+  // Single source of truth: change values in .env, never literals in code.
+  // Served to the frontend via GET /api/v1/config (see app.ts).
+  MAX_PDF_SIZE_MB: z.coerce.number().positive().max(100).default(5),
+  MAX_PDF_FILES: z.coerce.number().int().min(1).max(10).default(1),
+  MAX_ZIP_SIZE_MB: z.coerce.number().positive().max(500).default(50),
+  MAX_ZIP_FILES: z.coerce.number().int().min(1).max(10).default(1),
+  MAX_VIDEO_SIZE_MB: z.coerce.number().positive().max(1000).default(200),
+  MAX_VIDEO_FILES: z.coerce.number().int().min(1).max(10).default(1),
+  MAX_IMAGE_SIZE_MB: z.coerce.number().positive().max(50).default(3),
+  MAX_IMAGE_FILES: z.coerce.number().int().min(1).max(10).default(5),
   OBJECT_STORAGE_ENDPOINT: z.string().optional().default(""),
   OBJECT_STORAGE_REGION: z.string().default("auto"),
   OBJECT_STORAGE_BUCKET: z.string().optional().default(""),
@@ -121,6 +133,8 @@ if (parsed.data.NODE_ENV === "production") {
     parsed.data.SSLCOMMERZ_INIT_URL.includes("sandbox")
   )
     throw new Error("Live mode must not use sandbox SSLCOMMERZ endpoints");
+  if (!parsed.data.MALWARE_SCAN_ENABLED)
+    throw new Error("MALWARE_SCAN_ENABLED must be true in production (uploaded files are served to other users)");
   if (parsed.data.MALWARE_SCAN_ENABLED && !parsed.data.BOUNCER_API_KEY)
     throw new Error(
       "MALWARE_SCAN_ENABLED=true requires BOUNCER_API_KEY (fail closed; never start unscanned-clean)",

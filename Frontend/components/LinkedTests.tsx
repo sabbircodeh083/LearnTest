@@ -1,10 +1,12 @@
 "use client";
 import Link from "next/link";
 import { Badge, statusTone } from "./ui";
+import { DataList, DataRow, RowChip, RowIcon } from "./DataList";
 import { apiGet } from "@/lib/api";
 import { useFetch } from "@/lib/hooks";
 import { SaveButton } from "@/lib/saved";
 import type { Exam } from "@/lib/types";
+import { priceLabel } from "@/lib/types";
 
 const KIND_LABEL: Record<string, string> = {
   quiz: "Quiz",
@@ -43,51 +45,38 @@ export function TestsExamsTable({ tests, title = "Tests & Exams", testHref }: { 
   return (
     <section className="mt-8" aria-label={title}>
       <h2 className="font-display text-xl font-bold sm:text-2xl">{title}</h2>
-      <div className="mt-3 overflow-x-auto rounded-xl border border-line bg-card">
-        <table className="w-full min-w-[760px] text-left text-sm">
-          <thead>
-            <tr className="text-[13px] text-muted">
-              <th className="px-4 py-3 font-medium">#</th>
-              <th className="px-4 py-3 font-medium">Title</th>
-              <th className="px-4 py-3 font-medium">Type</th>
-              <th className="px-4 py-3 font-medium">Questions</th>
-              <th className="px-4 py-3 font-medium">Duration</th>
-              <th className="px-4 py-3 font-medium">Price</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 font-medium">Action</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-line">
-            {tests.map((t, i) => (
-              <tr key={String(t._id)}>
-                <td className="px-4 py-3 text-muted">{i + 1}</td>
-                <td className="max-w-[220px] truncate px-4 py-3 font-semibold">{t.title}</td>
-                <td className="px-4 py-3">
-                  <span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-bold ${KIND_BADGE[t.kind ?? "quiz"] ?? KIND_BADGE.quiz}`}>
-                    {KIND_LABEL[t.kind ?? "quiz"] ?? "Quiz"}
-                  </span>
-                </td>
-                <td className="px-4 py-3">{counts.data?.[String(t._id)] ?? "—"}</td>
-                <td className="px-4 py-3">{t.durationMinutes} min</td>
-                <td className="px-4 py-3">{(t.price ?? 0) > 0 ? `৳ ${t.price}` : "Free"}</td>
-                <td className="px-4 py-3">
-                  <Badge tone={statusTone(t.status)}>{t.status}</Badge>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="inline-flex items-center gap-1">
-                    <Link
-                      href={hrefOf(t)}
-                      className="rounded-lg bg-[#16a34a] px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-[#15803d]"
-                    >
-                      Start
-                    </Link>
-                    <SaveButton targetType="exam" targetId={String(t._id)} />
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="mt-3">
+        <DataList label={title}>
+          {tests.map((t) => (
+            <DataRow
+              key={String(t._id)}
+              icon={
+                <RowIcon tone={KIND_BADGE[t.kind ?? "quiz"] ?? KIND_BADGE.quiz!}>
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round"><rect x="5" y="4" width="14" height="17" rx="2" /><path d="M9 4a3 3 0 0 1 6 0" /><path d="M9 11h6M9 15h4" /></svg>
+                </RowIcon>
+              }
+              title={t.title}
+              meta={
+                <>
+                  {counts.data?.[String(t._id)] ?? "—"} questions · {t.durationMinutes} min · {priceLabel(t.price, t.currency)}
+                  {" · "}<Badge tone={statusTone(t.status)}>{t.status}</Badge>
+                </>
+              }
+              chip={<RowChip tone={KIND_BADGE[t.kind ?? "quiz"] ?? KIND_BADGE.quiz!}>{KIND_LABEL[t.kind ?? "quiz"] ?? "Quiz"}</RowChip>}
+              actions={
+                <>
+                  <Link
+                    href={hrefOf(t)}
+                    className="rounded-lg bg-[#16a34a] px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-[#15803d]"
+                  >
+                    Start
+                  </Link>
+                  <SaveButton targetType="exam" targetId={String(t._id)} />
+                </>
+              }
+            />
+          ))}
+        </DataList>
       </div>
     </section>
   );

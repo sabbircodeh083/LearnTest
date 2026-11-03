@@ -23,7 +23,7 @@ export default function FollowingPage() {
     const q = debouncedSearch.trim().toLowerCase();
     return (teachers.data?.items ?? [])
       .filter((t) => ids.has(t.userId))
-      .filter((t) => !q || t.name.toLowerCase().includes(q) || t.email.toLowerCase().includes(q));
+      .filter((t) => !q || t.name.toLowerCase().includes(q) || (t.username ?? "").toLowerCase().includes(q));
   }, [teachers.data, follows.data, debouncedSearch]);
 
   const unfollow = async (teacherId: string) => {
@@ -52,17 +52,17 @@ export default function FollowingPage() {
             {followed.map((t) => (
               <article key={t.userId} className="rounded-xl border border-line bg-card p-4">
                 <div className="flex items-center gap-3">
-                  <Link href={`/student/teachers/${t.userId}`} aria-label={`${t.name || t.email}'s profile`} className="shrink-0">
+                  <Link href={`/student/teachers/${t.userId}`} aria-label={`${t.name || "Teacher"}'s profile`} className="shrink-0">
                     <span aria-hidden className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-soft text-xs font-bold">
                       {t.avatarUploadId ? (
-                        <AvatarImg uploadId={t.avatarUploadId} name={t.name || t.email} className="h-full w-full" />
+                        <AvatarImg uploadId={t.avatarUploadId} name={t.name || "Teacher"} className="h-full w-full" />
                       ) : (
-                        (t.name || t.email || "?").trim().slice(0, 2).toUpperCase()
+                        (t.name || "Teacher" || "?").trim().slice(0, 2).toUpperCase()
                       )}
                     </span>
                   </Link>
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold"><Link href={`/student/teachers/${t.userId}`} className="hover:text-brandstrong">{t.name || t.email}</Link></p>
+                    <p className="font-semibold"><Link href={`/student/teachers/${t.userId}`} className="hover:text-brandstrong">{t.name || "Teacher"}</Link></p>
                     <p className="truncate text-sm text-muted">{t.bio || "Teacher on LearnTest"}</p>
                   </div>
                   <Btn variant="ghost" onClick={() => unfollow(t.userId)}>Unfollow</Btn>

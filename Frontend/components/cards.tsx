@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Badge, statusTone } from "./ui";
 import type { BadgeTone } from "./ui";
 import { AvatarImg } from "./profile";
-import { fmtDate, fmtMoney, idOf, type Assignment, type Playlist, type Question, type Video } from "@/lib/types";
+import { fmtDate, fmtMoney, idOf, type Playlist, type Question, type Video } from "@/lib/types";
 
 export function Tags({ tags }: { tags: string[] }) {
   if (!tags?.length) return null;
@@ -120,22 +120,6 @@ export function PlaylistCard({ playlist, thumbnailUrl, href, action, creator }: 
           {action && <span className="ml-auto shrink-0">{action}</span>}
         </div>
       )}
-      </div>
-    </article>
-  );
-}
-
-export function AssignmentCard({ assignment, href }: { assignment: Assignment; href: string }) {
-  return (
-    <article className="rounded-xl border border-line bg-card p-4">
-      <div className="flex items-start justify-between gap-3">
-        <Link href={href} className="font-semibold hover:text-brandstrong">{assignment.title}</Link>
-        <Badge tone={statusTone(assignment.status)}>{assignment.status}</Badge>
-      </div>
-      <p className="mt-2 line-clamp-2 text-sm text-muted">{assignment.description || "No instructions provided."}</p>
-      <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted">
-        <Badge>Max score {assignment.maxScore}</Badge>
-        {assignment.dueAt && <Badge tone="amber">Due {fmtDate(assignment.dueAt)}</Badge>}
       </div>
     </article>
   );

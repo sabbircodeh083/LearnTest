@@ -73,6 +73,15 @@ export interface GradeResult {
   feedback: string;
 }
 
+/** Automatic teacher feedback for an MCQ score percentage (0–100).
+ *  Boundaries are contiguous: >= 80, >= 60, >= 50, else below 50. */
+export function autoFeedbackForPercent(pct: number): string {
+  if (pct >= 80) return "Great job, keep going!";
+  if (pct >= 60) return "Good job, try to be better.";
+  if (pct >= 50) return "You can be better, keep hard work.";
+  return "Be serious, it is high time.";
+}
+
 /** Grade an all-MCQ exam. Call only after isAutoGradable() is true. */
 export function gradeMcqExam(
   questions: GradableQuestion[],
@@ -96,10 +105,13 @@ export function gradeMcqExam(
       correctCount += 1;
     }
   }
+  // Percentage by marks; when the total is 0 (all zero-mark questions),
+  // fall back to the share of correctly answered questions.
+  const pct = total > 0 ? (score / total) * 100 : (correctCount / questions.length) * 100;
   return {
     score,
     total,
     correctCount,
-    feedback: `Auto-graded: ${correctCount}/${questions.length} correct (${score}/${total} marks).`,
+    feedback: `Auto-graded: ${correctCount}/${questions.length} correct (${score}/${total} marks). ${autoFeedbackForPercent(pct)}`,
   };
 }

@@ -28,15 +28,6 @@ export function contentRouter(deps: { requireAuth: any; verified: any[]; optiona
     if (!owner && doc.price > 0 && (!req.user || !(await canAccessPaid(req.user, doc, type, doc.id)))) throw forbidden("Purchase required");
     ok(res, strip ? strip(doc, Boolean(owner)) : doc);
   });
-  const create = (Model: any) => asyncHandler(async (req, res) => {
-    const doc = await Model.create({ ...req.body, ownerId: req.user!.id });
-    ok(res, doc, 201);
-  });
-  const update = (Model: any) => asyncHandler(async (req, res) => {
-    const doc = await Model.findById(p(req).id); if (!doc) throw notFound();
-    if (!isOwnerOrAdmin(req.user!, doc.ownerId)) throw forbidden();
-    Object.assign(doc, req.body); await doc.save(); ok(res, doc);
-  });
   const remove = (Model: any) => asyncHandler(async (req, res) => {
     const doc = await Model.findById(p(req).id); if (!doc) throw notFound();
     if (!isOwnerOrAdmin(req.user!, doc.ownerId)) throw forbidden();
@@ -52,6 +43,22 @@ export function contentRouter(deps: { requireAuth: any; verified: any[]; optiona
 
   r.get("/videos", ...optionalList(Video));
   r.get("/videos/:id", optionalAuth, validate(idParam, "params"), getOne(Video, "video")); // paid check needs user; public free still requires auth per guard stack below
+  // Locked preview for paid videos: safe metadata + price + entitlement, so an
+  // unpaid student sees a pay gate (title/price/Buy button) instead of a bare
+  // 403. Playback identifiers (youtubeId/assetUploadId) are never included.
+  r.get("/videos/:id/preview", optionalAuth, validate(idParam, "params"), asyncHandler(async (req, res) => {
+    const doc: any = await Video.findById(p(req).id).lean(); if (!doc) throw notFound();
+    const owner = req.user && isOwnerOrAdmin(req.user, doc.ownerId);
+    if (!owner && (doc.status !== "published" || doc.visibility === "private")) throw notFound();
+    const entitled = Boolean(owner) || Number(doc.price ?? 0) <= 0 ||
+      (req.user ? await canAccessPaid(req.user, doc, "video", String(doc._id)) : false);
+    ok(res, {
+      _id: String(doc._id), ownerId: doc.ownerId, title: doc.title, description: doc.description ?? "",
+      tags: doc.tags ?? [], visibility: doc.visibility, status: doc.status,
+      price: doc.price ?? 0, currency: doc.currency ?? "USD",
+      sourceType: doc.sourceType ?? "upload", entitled: Boolean(entitled), createdAt: doc.createdAt ?? null,
+    });
+  }));
   // Product rule: YouTube videos are always free for students — price must stay 0.
   const youtubePriceFree = (sourceType: unknown, price: unknown) => {
     if (sourceType === "youtube" && price !== undefined && Number(price) > 0)
@@ -59,6 +66,15 @@ export function contentRouter(deps: { requireAuth: any; verified: any[]; optiona
   };
   r.post("/videos", requireAuth, ...verified, teacherOrAdmin, validate(contentBody.extend({ sourceType: z.enum(["youtube", "upload"]), youtubeId: z.string().max(32).optional().default(""), assetUploadId: z.string().max(100).nullable().optional() })), asyncHandler(async (req, res) => {
     youtubePriceFree(req.body.sourceType, req.body.price);
+    if (req.body.sourceType === "youtube" && req.body.youtubeId && !/^[A-Za-z0-9_-]{11}$/.test(req.body.youtubeId))
+      throw badRequest("Invalid YouTube video ID.");
+    // An attached file must belong to the caller and be video content —
+    // otherwise deleting this video later could destroy someone else's file.
+    if (req.body.assetUploadId) {
+      const up: any = await Upload.findById(req.body.assetUploadId).select("ownerId purpose detectedMime").lean();
+      if (!up || (String(up.ownerId) !== req.user!.id && req.user!.role !== "admin") || up.purpose !== "content" || !String(up.detectedMime).startsWith("video/"))
+        throw badRequest("Attached file is not your uploaded video content.");
+    }
     const doc = await Video.create({ ...req.body, ownerId: req.user!.id });
     ok(res, doc, 201);
   }));
@@ -85,7 +101,8 @@ export function contentRouter(deps: { requireAuth: any; verified: any[]; optiona
       await Playlist.updateMany({ videoIds: doc.id }, { $pull: { videoIds: doc.id } });
       if (doc.assetUploadId) {
         const up: any = await Upload.findById(doc.assetUploadId).lean();
-        if (up) {
+        // Only ever delete a file the video owner actually owns.
+        if (up && String(up.ownerId) === String(doc.ownerId)) {
           await storage.delete(up.storageKey).catch(() => undefined);
           await Upload.deleteOne({ _id: up._id }).catch(() => undefined);
         }
@@ -96,8 +113,23 @@ export function contentRouter(deps: { requireAuth: any; verified: any[]; optiona
 
   r.get("/playlists", ...optionalList(Playlist));
   r.get("/playlists/:id", optionalAuth, validate(idParam, "params"), getOne(Playlist, "playlist"));
-  r.post("/playlists", requireAuth, ...verified, teacherOrAdmin, validate(contentBody.extend({ videoIds: z.array(z.string().max(100)).max(200).default([]) })), create(Playlist));
-  r.patch("/playlists/:id", requireAuth, ...verified, validate(idParam, "params"), validate(contentBody.partial().extend({ videoIds: z.array(z.string().max(100)).max(200).optional() })), update(Playlist));
+  // Product rule: playlists are always free for students — price must stay 0.
+  const playlistPriceFree = (price: unknown) => {
+    if (price !== undefined && Number(price) > 0)
+      throw badRequest("Playlists are always free for students — price must be 0.");
+  };
+  r.post("/playlists", requireAuth, ...verified, teacherOrAdmin, validate(contentBody.extend({ videoIds: z.array(z.string().max(100)).max(200).default([]) })), asyncHandler(async (req, res) => {
+    playlistPriceFree(req.body.price);
+    const doc = await Playlist.create({ ...req.body, price: 0, ownerId: req.user!.id });
+    ok(res, doc, 201);
+  }));
+  r.patch("/playlists/:id", requireAuth, ...verified, validate(idParam, "params"), validate(contentBody.partial().extend({ videoIds: z.array(z.string().max(100)).max(200).optional() })), asyncHandler(async (req, res) => {
+    const doc: any = await Playlist.findById(p(req).id); if (!doc) throw notFound();
+    if (!isOwnerOrAdmin(req.user!, doc.ownerId)) throw forbidden();
+    playlistPriceFree((req.body as any).price);
+    (req.body as any).price = 0; // normalize: free, always
+    Object.assign(doc, req.body); await doc.save(); ok(res, doc);
+  }));
   r.delete("/playlists/:id", requireAuth, ...verified, validate(idParam, "params"),
     validate(z.object({ hard: z.enum(["true", "1"]).optional() }), "query"), asyncHandler(async (req, res) => {
       const doc: any = await Playlist.findById(p(req).id); if (!doc) throw notFound();
@@ -117,6 +149,16 @@ export function contentRouter(deps: { requireAuth: any; verified: any[]; optiona
 
   r.get("/questions", ...optionalList(Question, stripPrivateQuestion));
   r.get("/questions/:id", optionalAuth, validate(idParam, "params"), getOne(Question, "question", stripPrivateQuestion));
+  // Locked preview for paid questions: stripped metadata + price + entitlement,
+  // so an unpaid student sees a pay gate instead of a bare 403.
+  r.get("/questions/:id/preview", optionalAuth, validate(idParam, "params"), asyncHandler(async (req, res) => {
+    const doc: any = await Question.findById(p(req).id); if (!doc) throw notFound();
+    const owner = req.user && isOwnerOrAdmin(req.user, doc.ownerId);
+    if (!owner && (doc.status !== "published" || doc.visibility === "private")) throw notFound();
+    const entitled = Boolean(owner) || Number(doc.price ?? 0) <= 0 ||
+      (req.user ? await canAccessPaid(req.user, doc, "question", doc.id) : false);
+    ok(res, { ...stripPrivateQuestion(doc, Boolean(owner)), entitled: Boolean(entitled) });
+  }));
   // MCQ authoring: options + correctOptions (indexes) + marks + explanation.
   // correctOptions must be exact indexes into options; single-answer takes exactly one.
   const questionExtras = {

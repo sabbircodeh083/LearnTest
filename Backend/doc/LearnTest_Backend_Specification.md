@@ -29,7 +29,7 @@ src/
   common/{errors/,middleware/,validation/,logger.ts,utils/}
   modules/
     users/ profiles/ teachers/ videos/ playlists/ questions/
-    exams/ assignments/ submissions/ comments/ reactions/ follows/
+    exams/ comments/ reactions/ follows/
     purchases/ entitlements/ payments/sslcommerz/ uploads/ health/
   tests/
 .env.example
@@ -109,7 +109,7 @@ Use SSLCOMMERZ's current official documentation for exact request fields and res
 - questions: ownerId, title, tags, question type, public prompt, private answer/rubric, linked content, visibility, price, status.
 - exams: ownerId, question references, availability, duration, attempt limits, price/access policy, status.
 - examAttempts: studentId, examId, attempt number, timing, answers, submission state, score and feedback with strict visibility.
-- assignments/submissions: assignmentId, studentId, file/repository/live URL references, state, teacher feedback, grade, timestamps.
+- exam attempts (incl. project submissions): examId, studentId, answers (file/repository/live URL references per slot), state, score, teacher feedback, timestamps.
 - comments/reactions/ratings/follows: authorId, target type/id, value/content, moderation state, timestamps; enforce uniqueness where appropriate.
 - purchases: userId, contentType/contentId, amount/currency, status, internal transaction ID, gateway session/validation references, verified transaction fields, status history.
 - paymentEvents: provider identifiers, event/transaction ID, safe metadata/hash, processing state and timestamps; unique idempotency index where possible.
@@ -168,7 +168,7 @@ Use SSLCOMMERZ's current official documentation for exact request fields and res
 - Videos/playlists: public listing/detail and owner-only mutations.
 - Questions: public discovery; exclude private answer/rubric fields unless authorized.
 - Exams: list/detail, eligibility, start attempt, submit attempt, view results according to release rules.
-- Assignments/submissions: submit, list own submissions, teacher review/grade within ownership.
+- Exam attempts: start, submit, list own attempts, teacher review/grade within ownership. (Assignments were unified into project-type exams.)
 - Engagement: comments, ratings, reactions, follows with validation and rate limits.
 - Purchases, entitlements, payment, uploads, and admin/moderation routes as specified above.
 
@@ -209,12 +209,18 @@ SSLCOMMERZ_IPN_URL=http://localhost:4000/api/v1/payments/sslcommerz/ipn
 PAYMENT_SUCCESS_URL=http://localhost:3000/payment/result
 PAYMENT_FAIL_URL=http://localhost:3000/payment/result
 PAYMENT_CANCEL_URL=http://localhost:3000/payment/result
-PAYMENT_CURRENCY=BDT
+PAYMENT_CURRENCY=USD
 
 UPLOAD_STORAGE=local
 UPLOAD_DIR=./private-uploads
-MAX_UPLOAD_SIZE_MB=10
-MAX_UPLOAD_FILES=3
+MAX_PDF_SIZE_MB=5
+MAX_PDF_FILES=1
+MAX_ZIP_SIZE_MB=50
+MAX_ZIP_FILES=1
+MAX_VIDEO_SIZE_MB=200
+MAX_VIDEO_FILES=1
+MAX_IMAGE_SIZE_MB=3
+MAX_IMAGE_FILES=5
 
 OBJECT_STORAGE_ENDPOINT=
 OBJECT_STORAGE_REGION=
@@ -377,11 +383,9 @@ LearnTest must include an administrative dashboard in the separate Next.js front
 - PATCH /api/v1/admin/content/:contentType/:contentId/moderation — hide, restore, or reject content with reason.
 - GET /api/v1/admin/payments — search verified payment/purchase records.
 - GET /api/v1/admin/purchases/:purchaseId — purchase and entitlement support details.
-- POST /api/v1/admin/entitlements/:entitlementId/revoke — revoke with reason and audit record.
-- POST /api/v1/admin/entitlements/:entitlementId/restore — restore with reason and audit record, after verifying policy.
 - GET /api/v1/admin/analytics — aggregated metrics with bounded date ranges.
 - GET /api/v1/admin/audit-logs — paginated audit log search.
-- GET /api/v1/admin/health — safe operational health summary; no secrets or internal configuration.
+- GET /api/v1/health and /api/v1/ready — operational health/readiness summaries; no secrets or internal configuration.
 
 ### 20.4 Admin API requirements
 - Every endpoint must require authentication, verified email, and the server-side admin role.

@@ -1,5 +1,6 @@
 "use client";
 import { Btn } from "./ui";
+import { ModalShell } from "./AlertDialog";
 
 export function RateDialog({ open, title, sub, value, busy, onPick, onClose, onSubmit }: {
   open: boolean; title: string; sub: string; value: number; busy: boolean;
@@ -7,9 +8,8 @@ export function RateDialog({ open, title, sub, value, busy, onPick, onClose, onS
 }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={title}>
-      <button aria-label="Close" className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative w-full max-w-md rounded-2xl border border-line bg-card p-6 text-center shadow-xl">
+    <ModalShell label={title} onClose={onClose}>
+      <div className="text-center">
         <h2 className="text-lg font-bold">{title}</h2>
         <p className="mt-1 text-sm text-muted">{sub}</p>
         <div className="mt-4 flex items-center justify-center gap-1.5" role="radiogroup" aria-label="Rating out of 5">
@@ -22,12 +22,12 @@ export function RateDialog({ open, title, sub, value, busy, onPick, onClose, onS
             </button>
           ))}
         </div>
-        {value > 0 && <p className="mt-2 text-sm font-semibold text-muted">{value}/5</p>}
+        {value > 0 ? <p className="mt-2 text-sm font-semibold text-muted">{value}/5</p> : <p role="alert" className="mt-2 text-sm font-medium text-danger">Choose a rating (1–5 stars) to submit, or tap Skip.</p>}
         <div className="mt-5 flex justify-end gap-2">
           <Btn variant="ghost" onClick={onClose}>Skip</Btn>
-          <Btn onClick={onSubmit} disabled={busy}>{busy ? "Saving…" : "Submit rating"}</Btn>
+          <Btn onClick={onSubmit} disabled={busy || value < 1}>{busy ? "Saving…" : "Submit rating"}</Btn>
         </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }

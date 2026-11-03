@@ -2,10 +2,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { apiDelete, apiGet, apiPost, qs } from "@/lib/api";
 import { useToast } from "@/components/ui";
+import { useDialog } from "@/components/AlertDialog";
 import { useAuth } from "@/lib/auth";
 import type { BookmarkDoc, Page } from "@/lib/types";
 
-export type SaveTargetType = "video" | "exam" | "assignment" | "playlist";
+export type SaveTargetType = "video" | "exam" | "playlist";
 export const saveKey = (targetType: string, targetId: string) => `${targetType}:${targetId}`;
 
 // A save tapped while signed out: completed right after the next sign-in.
@@ -17,7 +18,7 @@ function readPendingSave(): { targetType: SaveTargetType; targetId: string } | n
   if (!raw) return null;
   try {
     const p = JSON.parse(raw) as { targetType?: unknown; targetId?: unknown };
-    if ((p.targetType === "video" || p.targetType === "exam" || p.targetType === "assignment" || p.targetType === "playlist")
+    if ((p.targetType === "video" || p.targetType === "exam" || p.targetType === "playlist")
       && typeof p.targetId === "string" && p.targetId) {
       return { targetType: p.targetType, targetId: p.targetId };
     }
@@ -113,6 +114,7 @@ export function SaveButton({ targetType, targetId }: {
 }) {
   const { ids, toggle } = useSaved();
   const { user, loading: authLoading } = useAuth();
+  const { confirm } = useDialog();
   const [busy, setBusy] = useState(false);
   const saved = ids.has(saveKey(targetType, targetId));
 
@@ -121,13 +123,15 @@ export function SaveButton({ targetType, targetId }: {
     e.stopPropagation();
     if (busy || authLoading) return;
     if (!user) {
-      const go = window.confirm("Please sign in to save this. Go to the sign-in page now?");
-      if (!go) return;
-      try {
-        window.localStorage.setItem(PENDING_KEY, JSON.stringify({ targetType, targetId }));
-      } catch { /* private mode — still return them back */ }
-      const back = `${window.location.pathname}${window.location.search}`;
-      window.location.href = `/sign-in?returnTo=${encodeURIComponent(back)}`;
+      void (async () => {
+        const go = await confirm({ title: "Please sign in to save this", message: "Go to the sign-in page now?", confirmLabel: "Sign in" });
+        if (!go) return;
+        try {
+          window.localStorage.setItem(PENDING_KEY, JSON.stringify({ targetType, targetId }));
+        } catch { /* private mode — still return them back */ }
+        const back = `${window.location.pathname}${window.location.search}`;
+        window.location.href = `/sign-in?returnTo=${encodeURIComponent(back)}`;
+      })();
       return;
     }
     setBusy(true);

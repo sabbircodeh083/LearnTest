@@ -1,6 +1,12 @@
 "use client";
 
-export const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000").replace(/\/$/, "");
+const rawApiBase = (process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000").replace(/\/$/, "");
+// Never send session cookies over plaintext http to a remote API from an
+// https page (local development on localhost is unaffected).
+export const API_BASE =
+  typeof window !== "undefined" && window.location.protocol === "https:" && rawApiBase.startsWith("http://") && !/^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(rawApiBase)
+    ? rawApiBase.replace(/^http:\/\//, "https://")
+    : rawApiBase;
 
 export class ApiError extends Error {
   status: number;

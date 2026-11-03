@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { AvatarImg } from "@/components/profile";
 import { Empty, ErrorBox, Loading, useToast } from "@/components/ui";
+import { DataList, DataRow, RowIcon } from "@/components/DataList";
 import { apiGet, ApiError, qs } from "@/lib/api";
 import { fmtDate } from "@/lib/types";
 
@@ -138,52 +139,32 @@ export default function TeacherFollowersPage() {
             : !items.length ? <Empty title="No followers yet" body={debounced || dateKey !== "all" ? "Nothing matches this search or date filter. Clear them to see everyone." : "Students who follow you will appear here."} />
             : (
               <>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[760px] text-left text-sm">
-                    <thead>
-                      <tr className="text-[13px] text-muted">
-                        <th className="rounded-l-lg bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">#</th>
-                        <th className="bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">User</th>
-                        <th className="bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Username</th>
-                        <th className="bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Join Date</th>
-                        <th className="rounded-r-lg bg-[#f4f6fb] px-4 py-2.5 font-medium dark:bg-soft">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-line">
-                      {items.map((f, i) => (
-                        <tr key={f._id} className="align-middle">
-                          <td className="px-4 py-4 text-muted">{(page - 1) * PAGE_SIZE + i + 1}</td>
-                          <td className="px-4 py-4">
-                            <div className="flex items-center gap-3">
-                              <span aria-hidden className={`flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full text-[13px] font-bold ${toneOf(f.followerId)}`}>
-                                {f.avatarUploadId ? (
-                                  <AvatarImg uploadId={f.avatarUploadId} name={f.name} className="h-full w-full" />
-                                ) : (
-                                  initialsOf(f.name)
-                                )}
-                              </span>
-                              <span>
-                                <span className="block font-semibold leading-tight">{f.name}</span>
-                                <span className="block max-w-[260px] truncate text-[13px] text-muted">{f.bio || (f.email ? "Student" : `id ${f.followerId.slice(0, 8)}…`)}</span>
-                              </span>
-                            </div>
-                          </td>
-                          <td className="whitespace-nowrap px-4 py-4">
-                            {f.username && <span className="inline-flex rounded-md bg-soft px-2.5 py-1 text-[13px] font-medium text-muted">{f.username}</span>}
-                          </td>
-                          <td className="whitespace-nowrap px-4 py-4 text-muted">{fmtDate(f.followedAt)}</td>
-                          <td className="whitespace-nowrap px-4 py-4">
-                            <button type="button" onClick={soon}
-                              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-3.5 py-2 text-[13px] font-semibold text-[#1d6ce0] hover:bg-[#eff6ff]">
-                              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></svg>
-                              View Profile
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <DataList label="Followers">
+                  {items.map((f) => (
+                    <DataRow
+                      key={f._id}
+                      icon={
+                        <RowIcon tone={toneOf(f.followerId)} shape="rounded-full">
+                          {f.avatarUploadId ? (
+                            <AvatarImg uploadId={f.avatarUploadId} name={f.name} className="h-full w-full" />
+                          ) : (
+                            <span className="text-[13px] font-bold">{initialsOf(f.name)}</span>
+                          )}
+                        </RowIcon>
+                      }
+                      title={f.name}
+                      meta={<>{f.username || f.email || `id ${f.followerId.slice(0, 8)}…`} · Joined {fmtDate(f.followedAt)}</>}
+                      detail={f.bio || null}
+                      actions={
+                        <button type="button" onClick={soon}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-3.5 py-2 text-[13px] font-semibold text-[#1d6ce0] hover:bg-[#eff6ff]">
+                          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></svg>
+                          View Profile
+                        </button>
+                      }
+                    />
+                  ))}
+                </DataList>
 
                 {/* footer */}
                 <div className="mt-4 rounded-xl border border-line bg-card px-4 py-4 text-center">

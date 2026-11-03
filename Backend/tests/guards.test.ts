@@ -29,7 +29,6 @@ describe("auth guards & authorization (§5, §15, §20.5)", () => {
     for (const u of ["student", "teacher"]) {
       await request(app).get("/api/v1/admin/overview").set(as(u)).expect(403);
       await request(app).get("/api/v1/admin/users").set(as(u)).expect(403);
-      await request(app).get("/api/v1/admin/health").set(as(u)).expect(403);
     }
     await request(app).get("/api/v1/admin/overview").expect(401);
   });

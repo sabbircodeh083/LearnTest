@@ -3,6 +3,7 @@ import { Fraunces, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth";
 import { ToastProvider } from "@/components/ui";
+import { DialogProvider } from "@/components/AlertDialog";
 
 const jakarta = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-jakarta", display: "swap" });
 const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-fraunces", display: "swap" });
@@ -20,7 +21,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
       <body>
         <AuthProvider>
-          <ToastProvider>{children}</ToastProvider>
+          <DialogProvider>
+            <ToastProvider>{children}</ToastProvider>
+          </DialogProvider>
         </AuthProvider>
       </body>
     </html>

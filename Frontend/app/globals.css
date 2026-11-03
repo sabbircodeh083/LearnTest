@@ -63,3 +63,15 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-jakarta
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
 input, select, textarea { font: inherit; }
+
+/* ---------- motion (commercial polish; disabled by prefers-reduced-motion above) ---------- */
+@keyframes lt-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes lt-modal-in { from { opacity: 0; transform: translateY(10px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes lt-toast-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes lt-fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes lt-drawer-in { from { transform: translateX(40px); opacity: 0.4; } to { transform: translateX(0); opacity: 1; } }
+.animate-drawer-in { animation: lt-drawer-in 0.25s ease-out both; }
+.animate-fade-in { animation: lt-fade-in 0.18s ease-out both; }
+.animate-modal-in { animation: lt-modal-in 0.22s cubic-bezier(0.21, 1.02, 0.73, 1) both; }
+.animate-toast-in { animation: lt-toast-in 0.25s ease-out both; }
+.animate-fade-up { animation: lt-fade-up 0.35s ease-out both; }

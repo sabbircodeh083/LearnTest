@@ -3,7 +3,7 @@ import { use } from "react";
 import Link from "next/link";
 import { Badge, Btn, ErrorBox, Loading, PageHead } from "@/components/ui";
 import { questionBadge } from "@/components/cards";
-import { BuyPanel, Engagement } from "@/components/purchase";
+import { BuyPanel, Engagement, LockedPayGate } from "@/components/purchase";
 import { apiGet } from "@/lib/api";
 import { useFetch } from "@/lib/hooks";
 import { fmtDate, type Question } from "@/lib/types";
@@ -13,7 +13,14 @@ export default function QuestionDetail({ params }: { params: Promise<{ id: strin
   const { data: q, error, loading, retry } = useFetch(() => apiGet<Question>(`/api/v1/questions/${id}`), [id]);
 
   if (loading) return <Loading label="Loading question…" />;
-  if (error) return <ErrorBox message={error} onRetry={retry} />;
+  if (error) return (
+    <LockedPayGate
+      previewPath={`/api/v1/questions/${id}/preview`}
+      contentType="question" contentId={id}
+      backHref="/student/questions" backLabel="All questions"
+      onUnlocked={retry}
+    />
+  );
   if (!q) return <ErrorBox message="Question not found." onRetry={retry} />;
 
   return (
