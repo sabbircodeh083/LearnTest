@@ -1,71 +1,385 @@
 # LearnTest Backend
 
-Express + TypeScript + MongoDB (Mongoose) + Better Auth (bcrypt) + SSLCOMMERZ REST API for the separate Next.js frontend.
+Express + TypeScript + MongoDB REST API for the LearnTest learning management system.
 
-## Local setup
+**Live Demo**: [https://www.easylearntest.tech](https://www.easylearntest.tech)
+
+## 🚀 Quick Start
 
 ```bash
+# Install dependencies
 npm install
-cp .env.example .env   # fill values below; never commit .env
-npm run dev            # http://localhost:4000  (docs: /api/docs, spec: /api/docs/openapi.json)
-npm test && npm run typecheck && npm run lint && npm run build
+
+# Set up environment variables
+cp .env.example .env
+# Edit .env with your configuration (see below)
+
+# Generate auth secret
+openssl rand -base64 32
+# Add to .env as BETTER_AUTH_SECRET
+
+# Run development server
+npm run dev
+# Server runs at http://localhost:4000
+# API docs: http://localhost:4000/api/docs
 ```
 
-Generate the auth secret: `openssl rand -base64 32` → `BETTER_AUTH_SECRET`.
+## 📋 Prerequisites
 
-## Where each secret comes from (manual provider steps)
+- Node.js 18+ 
+- MongoDB Atlas account (or local MongoDB)
+- SMTP email service (for verification emails)
+- SSLCOMMERZ account (for payments)
+- Google/GitHub OAuth apps (optional, for social login)
 
-| Value                          | Obtained from                                                                                                                                                                                                           |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `MONGODB_URI`                  | MongoDB Atlas → Database → Connect → Drivers. Create a least-privilege DB user; restrict Network Access to your API host.                                                                                               |
-| `GOOGLE_CLIENT_ID/SECRET`      | Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Web client. Authorized redirect: `http://localhost:4000/api/auth/callback/google` (prod: `https://<api-domain>/api/auth/callback/google`).             |
-| `GITHUB_CLIENT_ID/SECRET`      | GitHub → Settings → Developer settings → OAuth Apps. Callback: `http://localhost:4000/api/auth/callback/github` (prod equivalent).                                                                                      |
-| `SMTP_*`                       | Your SMTP/email provider (e.g. Resend/SES/Mailgun SMTP creds). Required for verification & reset mail in production.                                                                                                    |
-| `SSLCOMMERZ_STORE_ID/PASSWORD` | SSLCOMMERZ merchant panel (sandbox first). Set IPN URL there to `https://<api-domain>/api/v1/payments/sslcommerz/ipn`. Localhost cannot receive IPN — use a public HTTPS tunnel (e.g. ngrok) or a deployed sandbox API. |
+## ⚙️ Environment Variables
 
-Keep dev and production URLs/credentials separate. `SSLCOMMERZ_MODE=live` with a sandbox endpoint is rejected at startup.
+Create a `.env` file with these variables:
 
-## Auth & roles (§4, §19)
+### Required
 
-- Better Auth mounted at `/api/auth/*` (official Express `toNodeHandler`), MongoDB adapter.
-- Email/password uses **bcrypt** via `emailAndPassword.password.hash/verify` (`bcrypt.hash(p,12)` / `bcrypt.compare`) — no custom password store, no manual compares in routes.
-- Verification required before protected features (`requireEmailVerified`); reset uses Better Auth's token flow by email.
-- Signup role allowlist is `student|teacher` only; `admin` is rejected by a DB hook. Sign-in never accepts a role. OAuth first-time users (default role, `roleSelected=false`) must `POST /api/v1/me/select-role` once before role-protected access. `PATCH /api/v1/me` cannot change role (strict schema).
-- First admin: sign up + verify normally, then `ADMIN_EMAIL=you@example.com npm run create-admin`. No public promotion endpoint.
-- Frontend routes students/teachers to their dashboards from `GET /api/v1/me` — UX only; every API route re-checks authorization.
+```env
+# Server
+NODE_ENV=development
+PORT=4000
+API_BASE_URL=http://localhost:4000
+FRONTEND_URL=http://localhost:3000
 
-## Payments (§7)
+# Database
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/
+MONGODB_DB_NAME=learntest
 
-`POST /api/v1/payments/sslcommerz/initiate` takes only `{contentType, contentId}`; price/currency are loaded from MongoDB. A pending `Purchase` is created before gateway initiation. Browser success/fail/cancel and IPN are **untrusted**: entitlement is granted only after the server calls the SSLCOMMERZ Validation API and `evaluateValidation` confirms `VALID/VALIDATED` + matching tran_id/amount/currency; `risk_level=1` is held. Settlement is atomic and idempotent (unique tran/payment-event/entitlement indexes) — duplicate IPNs do not duplicate entitlements. Refunds are not implemented (status `refunded` reserved; no endpoint rewrites gateway facts).
+# Auth
+BETTER_AUTH_SECRET=<generate with: openssl rand -base64 32>
+BETTER_AUTH_URL=http://localhost:4000
+CORS_ORIGINS=http://localhost:3000
+BETTER_AUTH_TRUSTED_ORIGINS=http://localhost:3000
 
-Reconciliation of stuck `pending` orders: re-deliver IPN or call the validation flow again for the order's `valId`; terminal states (`paid/failed/cancelled/expired`) cannot transition further except the documented `risk_hold → paid/failed`.
+# Email (for verification & password reset)
+SMTP_HOST=smtp.resend.com
+SMTP_PORT=587
+SMTP_USER=resend
+SMTP_PASS=your_smtp_password
+SMTP_FROM=noreply@yourdomain.com
+```
 
-## Uploads (§9)
+### Optional (for full features)
 
-Multer only on `/api/v1/uploads/*` with size/file/field limits. Extensions + **magic bytes** (file-type) + declared MIME must all agree; SVG/executables are never allowed. Server-generated storage keys, SHA-256 checksums, private dir outside the web root, authorized download only (owner, assignment-owning teacher, or admin). Production: set `UPLOAD_STORAGE=s3` credentials and move storage to private object storage (local disk is dev-only; malware scanning hook: `MALWARE_SCAN_ENABLED`).
+```env
+# OAuth Social Login
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+GITHUB_CLIENT_ID=your_github_client_id
+GITHUB_CLIENT_SECRET=your_github_client_secret
 
-## Malware scanning (Bouncer)
+# Payment Gateway
+SSLCOMMERZ_STORE_ID=your_store_id
+SSLCOMMERZ_STORE_PASSWORD=your_store_password
+SSLCOMMERZ_MODE=sandbox  # or 'live' for production
+PAYMENT_CURRENCY=BDT
 
-Every upload is scanned with [Bouncer](https://usebouncer.dev/docs/) before anyone can download it.
+# File Upload & Storage
+UPLOAD_STORAGE=local  # or 's3' for production
+UPLOAD_DIR=./uploads
+MAX_PDF_SIZE_MB=10
+MAX_VIDEO_SIZE_MB=100
+MAX_IMAGE_SIZE_MB=5
+MAX_ZIP_SIZE_MB=50
 
-**Account & key (manual steps):** sign up at usebouncer.dev → Dashboard → API Keys → create a key (`bnc_live_…`, shown once) → set `BOUNCER_API_KEY` in the backend `.env` only. Never put it in Next.js (`NEXT_PUBLIC_*`), an API response, or logs (logger redacts it; the scan service never logs the key or v2 upload fields).
+# Malware Scanning (Bouncer)
+MALWARE_SCAN_ENABLED=false
+BOUNCER_API_KEY=your_bouncer_api_key
 
-**How it works:** `MALWARE_SCAN_ENABLED=true` → the file is stored under the private `quarantine/` prefix (Cloudflare R2 bucket must stay private — no public access / r2.dev; local disk mirrors this under `UPLOAD_DIR` in dev), recorded as `scanStatus=pending_scan`, and scanned asynchronously by `src/services/malware-scan.ts` (separate from route handlers; provider is replaceable). Files ≤ ~4.5 MB use `POST /v1/scan`; larger files use the documented v2 flow (`POST /v2/scan` → direct-to-storage upload → poll `GET /v1/scan/:id`) up to your tier limit (Free 25 MB / Pro 100 MB via v2), also bounded by the per-type limits (`MAX_PDF/ZIP/VIDEO/IMAGE_SIZE_MB`). Polling is bounded (`MALWARE_SCAN_POLL_*`, default 15 × 2 s), requests time out (`MALWARE_SCAN_TIMEOUT_MS`), transient 5xx/429 responses retry with backoff (`MALWARE_SCAN_MAX_RETRIES`, honoring `Retry-After`).
+# Rate Limiting
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=1000
+```
 
-**Verdict mapping & fail-closed policy:** `clean → clean` (only state that promotes the file out of quarantine to `files/` and allows download), `suspicious → suspicious`, `malicious → infected`, engine failure/timeout/quota/auth/network errors → `scan_failed`. Suspicious, infected, pending, and failed files return `403` on download and stay quarantined. Scanning enabled but unavailable never marks a file clean; an authorized owner/admin can retry with `POST /api/v1/uploads/:id/rescan`. Auth, ownership, size limits, extension/MIME allowlists, and magic-byte checks are enforced independently of scanning.
+## 🔐 Setting Up OAuth Providers
 
-**Quotas:** account-level, monthly (Free: 500 scans/mo, 25 MB max via v2; Pro: 10,000/mo, 100 MB). Quota exhaustion returns 429 `rate_limit_exceeded` → uploads stay `scan_failed`/quarantined until the period resets or the plan is upgraded. Check usage with `GET /v1/scan/usage` using your key.
+### Google OAuth
 
-**Disabled policy (`MALWARE_SCAN_ENABLED=false`):** scanning is off by explicit operator choice. Files are stored approved but recorded as `scanStatus=disabled` — unscanned, **never** labelled `clean`. If your policy requires scanning, leave it enabled; enabling it without `BOUNCER_API_KEY` fails startup.
+1. Go to [Google Cloud Console](https://console.cloud.google.com)
+2. Create a new project or select existing
+3. Enable Google+ API
+4. Go to **Credentials** → **Create Credentials** → **OAuth 2.0 Client ID**
+5. Add authorized redirect URI:
+   - Development: `http://localhost:4000/api/auth/callback/google`
+   - Production: `https://your-api-domain.com/api/auth/callback/google`
+6. Copy Client ID and Client Secret to `.env`
 
-**Testing:** `npm test` mocks the Bouncer API (clean, suspicious, malicious, pending/poll-exhaustion, timeout, quota, invalid-key, unavailable, retry, and >4.5 MB v2 scenarios). A real-account smoke test (not in CI) needs a valid key: set `MALWARE_SCAN_ENABLED=true`, upload a harmless PDF, confirm `pending_scan → clean` and download works; upload the EICAR test string in a file to confirm it is blocked as infected.
+### GitHub OAuth
 
-**Deployment:** set `MALWARE_SCAN_ENABLED=true`, `BOUNCER_API_KEY`, `UPLOAD_STORAGE=s3` with the R2 `OBJECT_STORAGE_*` values, and a private bucket in the host dashboard; redeploy and watch logs for `malware scan completed` (scan IDs only).
+1. Go to [GitHub Developer Settings](https://github.com/settings/developers)
+2. Click **New OAuth App**
+3. Set Authorization callback URL:
+   - Development: `http://localhost:4000/api/auth/callback/github`
+   - Production: `https://your-api-domain.com/api/auth/callback/github`
+4. Copy Client ID and Client Secret to `.env`
 
-## Tests
+## 💳 Payment Gateway Setup (SSLCOMMERZ)
 
-`npm test` — covering bcrypt, signup-role rejection, payment validation/state transitions/idempotency, upload type rules, guard/ownership/validation/admin-403 behavior via injected sessions, and the mocked Bouncer suite above (no DB or real Bouncer account needed). DB-backed acceptance flows (real OAuth, Atlas, SSLCOMMERZ sandbox IPN, real Bouncer scan) require the provider setup above.
+1. Sign up at [SSLCOMMERZ](https://www.sslcommerz.com)
+2. Get sandbox credentials from merchant dashboard
+3. Set IPN (Instant Payment Notification) URL:
+   - Development: Use ngrok or cloudflared tunnel → `https://your-tunnel.ngrok.io/api/v1/payments/sslcommerz/ipn`
+   - Production: `https://your-api-domain.com/api/v1/payments/sslcommerz/ipn`
+4. Add credentials to `.env`:
+   ```env
+   SSLCOMMERZ_STORE_ID=test_store_id
+   SSLCOMMERZ_STORE_PASSWORD=test_password
+   SSLCOMMERZ_MODE=sandbox
+   ```
 
-## Deployment
+## 👥 User Roles & Authentication
 
-Deploy separately from Next.js. Set production env in the host dashboard, exact `FRONTEND_URL`/`CORS_ORIGINS`/`BETTER_AUTH_URL`/trusted origins and OAuth callbacks, Atlas IP allowlist, private object storage, HTTPS (secure `HttpOnly` cookies, `SameSite=None` cross-site). Graceful shutdown on SIGTERM/SIGINT; `GET /api/v1/health` (liveness) and `/api/v1/ready` (DB readiness). Rollback: redeploy the previous build artifact; migrations are additive indexes only.
+### Role System
+
+The platform supports three roles:
+- **Student**: Can view content, take exams, submit assignments
+- **Teacher**: Can create content, grade submissions, earn from sales
+- **Admin**: Full system access, user management, moderation
+
+### OAuth Role Selection Flow
+
+**New OAuth users** (Google/GitHub) go through an onboarding flow:
+
+1. User signs in with OAuth → Account created with `roleSelected: false`
+2. Redirected to role selection page
+3. Must choose Student or Teacher role
+4. After selection, redirected to role-specific dashboard
+
+**Technical Details:**
+- Role stored in `user` collection (Better Auth database)
+- `roleSelected` flag prevents accessing features before selection
+- Endpoint: `POST /api/v1/me/select-role` (body: `{role: "student" | "teacher"}`)
+- Returns `409 Conflict` if role already selected
+- Database update handles both `id` and `_id` MongoDB field formats
+
+### Creating First Admin
+
+```bash
+# 1. Sign up normally as student/teacher
+# 2. Verify your email
+# 3. Run the admin creation script:
+ADMIN_EMAIL=your@email.com npm run create-admin
+```
+
+### Authentication Features
+
+- ✅ Email/password signup with verification
+- ✅ OAuth social login (Google, GitHub)
+- ✅ Password reset via email
+- ✅ Bcrypt password hashing (12 rounds)
+- ✅ Role-based access control
+- ✅ Session-based auth (HTTP-only cookies)
+- ✅ Email verification required for protected features
+
+## 📁 Project Structure
+
+```
+Backend/
+├── src/
+│   ├── auth/           # Authentication & authorization
+│   │   ├── auth.ts     # Better Auth configuration
+│   │   ├── guards.ts   # Session resolver, role guards
+│   │   └── password-policy.ts
+│   ├── common/         # Shared utilities
+│   │   ├── errors.ts
+│   │   ├── logger.ts
+│   │   ├── middleware.ts
+│   │   └── schemas.ts
+│   ├── config/         # Configuration
+│   │   ├── database.ts
+│   │   └── env.ts      # Environment validation (Zod)
+│   ├── models/         # Mongoose models
+│   │   └── index.ts
+│   ├── modules/        # Feature modules (routes + logic)
+│   │   ├── admin.routes.ts
+│   │   ├── content.routes.ts
+│   │   ├── engagement.routes.ts
+│   │   ├── learning.routes.ts
+│   │   ├── profile.routes.ts  # Includes role selection
+│   │   ├── uploads.routes.ts
+│   │   └── payments/
+│   ├── services/       # Business logic & external services
+│   │   ├── audit.ts
+│   │   ├── mail.ts
+│   │   ├── malware-scan.ts
+│   │   └── user-roles.ts  # Role management utilities
+│   ├── app.ts          # Express app setup
+│   ├── server.ts       # Server initialization
+│   └── openapi.ts      # API documentation
+├── scripts/            # Utility scripts
+│   ├── seed.ts
+│   └── create-admin.ts
+├── tests/              # Test suite
+│   ├── guards.test.ts
+│   ├── payments.test.ts
+│   ├── role-source.test.ts
+│   └── ...
+└── .env.example        # Environment template
+```
+
+## 🧪 Testing
+
+```bash
+# Run all tests
+npm test
+
+# Run with coverage
+npm test -- --coverage
+
+# Run specific test file
+npm test guards.test.ts
+
+# Type checking
+npm run typecheck
+
+# Linting
+npm run lint
+```
+
+### Test Coverage
+
+- ✅ Authentication & role guards
+- ✅ Payment validation & state transitions
+- ✅ Upload file type validation
+- ✅ Ownership & authorization
+- ✅ Admin access control
+- ✅ Malware scanning (mocked)
+
+## 📚 API Documentation
+
+When running in development mode:
+- **Swagger UI**: http://localhost:4000/api/docs
+- **OpenAPI JSON**: http://localhost:4000/api/docs/openapi.json
+
+### Key Endpoints
+
+#### Authentication
+- `POST /api/auth/sign-up/email` - Email/password signup
+- `POST /api/auth/sign-in/email` - Email/password login  
+- `POST /api/auth/sign-in/social` - OAuth (Google/GitHub)
+- `POST /api/auth/sign-out` - Sign out
+
+#### Profile
+- `GET /api/v1/me` - Get current user profile & role
+- `PATCH /api/v1/me` - Update profile (not role)
+- `POST /api/v1/me/select-role` - OAuth role selection (once)
+
+#### Content (Students)
+- `GET /api/v1/videos` - List videos
+- `GET /api/v1/videos/:id` - Video details
+- `GET /api/v1/exams` - List exams
+- `POST /api/v1/exams/:id/attempts` - Start exam
+
+#### Content (Teachers)
+- `POST /api/v1/videos` - Create video
+- `POST /api/v1/exams` - Create exam
+- `GET /api/v1/submission-queue/items` - Grading queue
+- `PATCH /api/v1/exam-attempts/:id/grade` - Grade submission
+
+#### Payments
+- `POST /api/v1/payments/sslcommerz/initiate` - Start payment
+- `POST /api/v1/payments/sslcommerz/ipn` - Payment webhook
+- `GET /api/v1/purchases/me` - My purchases
+
+#### Admin
+- `GET /api/v1/admin/overview` - Dashboard stats
+- `GET /api/v1/admin/users` - User management
+- `PATCH /api/v1/admin/users/:id/role` - Change user role
+- `PATCH /api/v1/admin/users/:id/status` - Suspend/activate
+
+## 🚀 Deployment
+
+### Production Checklist
+
+- [ ] Set `NODE_ENV=production`
+- [ ] Use strong `BETTER_AUTH_SECRET` (32+ characters)
+- [ ] Configure production MongoDB Atlas with IP whitelist
+- [ ] Set correct `API_BASE_URL` and `FRONTEND_URL`
+- [ ] Configure CORS origins properly
+- [ ] Set up HTTPS (for secure cookies)
+- [ ] Use object storage (S3/R2) for file uploads
+- [ ] Enable malware scanning with Bouncer API
+- [ ] Configure production SSLCOMMERZ credentials
+- [ ] Set up proper SMTP service
+- [ ] Configure OAuth callbacks with production URLs
+- [ ] Set rate limits appropriately
+- [ ] Monitor logs and errors
+
+### Health Checks
+
+- **Liveness**: `GET /api/v1/health` - Always returns 200
+- **Readiness**: `GET /api/v1/ready` - Returns 200 when DB connected
+
+### Graceful Shutdown
+
+The server handles `SIGTERM` and `SIGINT` signals:
+- Stops accepting new connections
+- Finishes pending requests (10s timeout)
+- Closes database connections
+- Exits cleanly
+
+## 🛠️ Troubleshooting
+
+### OAuth Role Selection Issues
+
+**Modal keeps appearing after selection:**
+- Check backend logs for database update success
+- Verify `getAuthDb` is initialized before `defaultResolver` in `server.ts`
+- Ensure MongoDB user document has `roleSelected: true` after selection
+
+**Database update fails:**
+- User documents may use `_id` instead of `id` field
+- Update logic tries both formats automatically
+- Check logs for "User not found in database" errors
+
+### Common Issues
+
+**"Auth service unavailable"**
+- MongoDB connection failed
+- Check `MONGODB_URI` in `.env`
+- Verify MongoDB Atlas IP whitelist
+
+**"Email verification required"**
+- SMTP not configured
+- Check `SMTP_*` environment variables
+- Check email spam folder
+
+**OAuth callback errors**
+- Verify callback URLs match in provider console
+- Check `BETTER_AUTH_URL` in `.env`
+- Ensure URLs include protocol (http:// or https://)
+
+## 📝 Scripts
+
+```bash
+npm run dev          # Development server with auto-reload
+npm run build        # Compile TypeScript to JavaScript
+npm run start        # Run compiled production server
+npm run typecheck    # Check types without emitting
+npm run lint         # Run ESLint
+npm test             # Run test suite
+npm run seed         # Seed database with sample data
+npm run create-admin # Promote user to admin
+```
+
+## 🤝 Contributing
+
+1. Follow existing code style
+2. Add tests for new features
+3. Run `npm run typecheck && npm run lint && npm test` before committing
+4. Update documentation for API changes
+
+## 📄 License
+
+ISC
+
+## 🔗 Related
+
+- **Live Demo**: [https://www.easylearntest.tech](https://www.easylearntest.tech)
+- **Frontend**: `../Frontend/README.md`
+- **API Spec**: `API-README.md`
+- **Environment**: `.env.example`
