@@ -21,12 +21,18 @@ export default function SelectRolePage() {
     setBusy(true); setError("");
     try {
       await apiPost("/api/v1/me/select-role", { role });
-      const me = await refresh();
-      router.replace(roleHome(me?.role ?? role));
+      // Small delay to ensure database write completes
+      await new Promise(resolve => setTimeout(resolve, 200));
+      // Refresh the auth context
+      await refresh();
+      // Additional delay for loading state
+      await new Promise(resolve => setTimeout(resolve, 400));
+      // Use window.location to force full page reload and clear session cache
+      window.location.href = roleHome(role);
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
-        const me = await refresh();
-        router.replace(roleHome(me?.role));
+        await refresh();
+        window.location.href = roleHome(role);
       } else {
         setError(e instanceof ApiError ? e.message : "Could not save your role.");
       }
@@ -36,12 +42,20 @@ export default function SelectRolePage() {
   return (
     <AuthCard title="How will you use LearnTest?" sub="Choose once. This decides your workspace and cannot be switched from settings.">
       {error && <Notice tone="red">{error}</Notice>}
+      {busy && (
+        <Notice tone="blue">
+          <div className="flex items-center justify-center gap-2">
+            <span aria-hidden className="h-4 w-4 animate-spin rounded-full border-2 border-[#1d6ce0] border-t-transparent" />
+            <span>Setting up your workspace, please wait...</span>
+          </div>
+        </Notice>
+      )}
       <div className="mt-2 grid gap-3">
-        <button disabled={busy} onClick={() => choose("student")} className="rounded-xl border border-line bg-card p-5 text-left hover:border-brand disabled:opacity-50 card-hover">
+        <button disabled={busy} onClick={() => choose("student")} className="rounded-xl border border-line bg-card p-5 text-left hover:border-brand disabled:opacity-50 disabled:cursor-not-allowed card-hover transition-all">
           <span className="font-display text-lg font-bold">Student</span>
           <span className="mt-1 block text-sm text-muted">Discover questions, watch lessons, take exams, and submit assignments.</span>
         </button>
-        <button disabled={busy} onClick={() => choose("teacher")} className="rounded-xl border border-line bg-card p-5 text-left hover:border-brand disabled:opacity-50 card-hover">
+        <button disabled={busy} onClick={() => choose("teacher")} className="rounded-xl border border-line bg-card p-5 text-left hover:border-brand disabled:opacity-50 disabled:cursor-not-allowed card-hover transition-all">
           <span className="font-display text-lg font-bold">Teacher</span>
           <span className="mt-1 block text-sm text-muted">Publish videos and questions, create exams, and grade student work.</span>
         </button>

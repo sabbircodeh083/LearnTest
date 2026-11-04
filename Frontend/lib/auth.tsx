@@ -58,7 +58,7 @@ export function useRedirectIfSignedIn(returnTo?: string | null) {
 
   useEffect(() => {
     if (loading || !user) return;
-    const home = !user.roleSelected && user.role !== "admin" ? "/select-role" : roleHome(user.role);
+    const home = roleHome(user.role);
     // A returnTo pointing back at an auth page would loop — ignore it.
     const dest = returnTo && !/^\/(sign-in|sign-up)(\/|$|\?)/.test(returnTo) ? returnTo : home;
     router.replace(dest);

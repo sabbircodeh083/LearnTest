@@ -38,12 +38,20 @@ export default function SavedContentPage() {
         title="Saved Content"
         sub="Videos and tests you bookmarked for later."
       />
-      <ModeToggle mode={mode} onChange={changeMode} videosTitle="Saved Videos" testsTitle="Saved Tests" playlistsTitle="Saved Playlists" />
+      <ModeToggle
+        mode={mode}
+        onChange={changeMode}
+        videosTitle="Saved Videos"
+        testsTitle="Saved Tests"
+        playlistsTitle="Saved Playlists"
+      />
 
       <div className="pb-10">
         {mode === "videos" ? (
           <DiscoverVideos
-            videoHref={(v: Video) => `/student/videos/${String(v._id)}?from=saved`}
+            videoHref={(v: Video) =>
+              `/student/videos/${String(v._id)}?from=saved`
+            }
             nameOf={nameOf}
             avatarOf={avatarOf}
             title=""

@@ -1,6 +1,8 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAuth, roleHome } from "@/lib/auth";
 import { PublicHeader } from "@/components/PublicHeader";
 import { DiscoverVideos, ModeToggle, PlaylistSlider, PracticeTests, useTeacherProfiles, type DiscoverMode } from "@/components/discover";
 import { apiGet, qs } from "@/lib/api";
@@ -9,10 +11,26 @@ import type { Exam, Page, Video } from "@/lib/types";
 import { priceLabel } from "@/lib/types";
 
 export default function HomePage() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
   const [mode, setMode] = useState<DiscoverMode>("videos");
   const { nameOf, avatarOf } = useTeacherProfiles();
   const videos = useFetch(() => apiGet<Page<Video>>(`/api/v1/videos${qs({ limit: 4 })}`), []);
   const exams = useFetch(() => apiGet<Page<Exam>>(`/api/v1/exams${qs({ limit: 20 })}`), []);
+
+  // Redirect authenticated users appropriately
+  useEffect(() => {
+    if (loading || !user) return;
+    
+    // First-time OAuth users who haven't selected a role yet
+    if (!user.roleSelected && user.role !== "admin") {
+      router.replace("/select-role");
+      return;
+    }
+    
+    // Users with a role go to their workspace
+    router.replace(roleHome(user.role));
+  }, [user, loading, router]);
 
   const heroVideo = (videos.data?.items ?? [])[0];
   const heroTests = useMemo(() => {
@@ -23,6 +41,15 @@ export default function HomePage() {
       .filter((e) => e.videoId && (e.videoId === yt || e.videoId === id))
       .slice(0, 3);
   }, [heroVideo, exams.data]);
+
+  // Show loading state while checking auth
+  if (loading || user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-muted">Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen">

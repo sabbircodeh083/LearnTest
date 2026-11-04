@@ -10,19 +10,34 @@ import { PASSWORD_MIN_LENGTH, validatePassword } from "./password-policy.js";
 
 /** Every endpoint that sets a password. Sign-in is deliberately excluded so
  *  existing accounts with older, shorter passwords can still sign in. */
-const PASSWORD_SET_PATHS = new Set(["/sign-up/email", "/reset-password", "/change-password", "/set-password"]);
+const PASSWORD_SET_PATHS = new Set([
+  "/sign-up/email",
+  "/reset-password",
+  "/change-password",
+  "/set-password",
+]);
 
 export const SIGNUP_ROLES = ["student", "teacher"] as const;
-export function assertSignupRole(role: unknown): string {
-  if (role === undefined || role === null || role === "") return "student";
+export function assertSignupRole(role: unknown): string | undefined {
+  if (role === undefined || role === null || role === "") return undefined;
   if (role === "student" || role === "teacher") return role;
-  throw new APIError("BAD_REQUEST", { message: "Role must be student or teacher" }); // admin can never self-assign
+  throw new APIError("BAD_REQUEST", {
+    message: "Role must be student or teacher",
+  }); // admin can never self-assign
 }
 
 export function createAuth(db: Db) {
   const social: Record<string, { clientId: string; clientSecret: string }> = {};
-  if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) social.google = { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET };
-  if (env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET) social.github = { clientId: env.GITHUB_CLIENT_ID, clientSecret: env.GITHUB_CLIENT_SECRET };
+  if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET)
+    social.google = {
+      clientId: env.GOOGLE_CLIENT_ID,
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
+    };
+  if (env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET)
+    social.github = {
+      clientId: env.GITHUB_CLIENT_ID,
+      clientSecret: env.GITHUB_CLIENT_SECRET,
+    };
   return betterAuth({
     appName: "LearnTest",
     baseURL: env.BETTER_AUTH_URL,
@@ -33,7 +48,9 @@ export function createAuth(db: Db) {
     trustedOrigins,
     database: mongodbAdapter(db),
     emailAndPassword: {
-      enabled: true, requireEmailVerification: true, minPasswordLength: PASSWORD_MIN_LENGTH,
+      enabled: true,
+      requireEmailVerification: true,
+      minPasswordLength: PASSWORD_MIN_LENGTH,
       // Keep 128 for compatibility: Better Auth also applies the max on sign-in,
       // so lowering it would lock out existing accounts with long passwords.
       // New passwords are capped at 72 UTF-8 bytes by the policy hook below.
@@ -41,9 +58,17 @@ export function createAuth(db: Db) {
       revokeSessionsOnPasswordReset: true,
       password: {
         hash: async (password: string) => bcrypt.hash(password, 12),
-        verify: async ({ hash, password }: { hash: string; password: string }) => bcrypt.compare(password, hash),
+        verify: async ({
+          hash,
+          password,
+        }: {
+          hash: string;
+          password: string;
+        }) => bcrypt.compare(password, hash),
       },
-      sendResetPassword: async ({ user, url }: any) => { await sendAuthEmail(user.email, "Reset your LearnTest password", url); },
+      sendResetPassword: async ({ user, url }: any) => {
+        await sendAuthEmail(user.email, "Reset your LearnTest password", url);
+      },
     } as any,
     hooks: {
       // Server-side strength check for every password-setting endpoint. Better
@@ -52,35 +77,77 @@ export function createAuth(db: Db) {
       before: createAuthMiddleware(async (ctx) => {
         if (!PASSWORD_SET_PATHS.has(ctx.path)) return;
         const body = (ctx.body ?? {}) as Record<string, unknown>;
-        const candidate = typeof body.newPassword === "string" ? body.newPassword : body.password;
+        const candidate =
+          typeof body.newPassword === "string"
+            ? body.newPassword
+            : body.password;
         if (typeof candidate !== "string") return; // let Better Auth report the missing field
         const errors = validatePassword(candidate);
-        if (errors.length) throw new APIError("BAD_REQUEST", { message: errors[0], code: "WEAK_PASSWORD" });
+        if (errors.length)
+          throw new APIError("BAD_REQUEST", {
+            message: errors[0],
+            code: "WEAK_PASSWORD",
+          });
       }),
     },
     emailVerification: {
-      sendOnSignUp: true, autoSignInAfterVerification: true, expiresIn: 3600,
-      sendVerificationEmail: async ({ user, url }: any) => { await sendAuthEmail(user.email, "Verify your LearnTest email", url); },
+      sendOnSignUp: true,
+      autoSignInAfterVerification: true,
+      expiresIn: 3600,
+      sendVerificationEmail: async ({ user, url }: any) => {
+        await sendAuthEmail(user.email, "Verify your LearnTest email", url);
+      },
     },
     socialProviders: social as any,
-    session: { expiresIn: 60 * 60 * 24 * 7, updateAge: 60 * 60 * 24, cookieCache: { enabled: true, maxAge: 60 } },
-    advanced: { useSecureCookies: env.NODE_ENV === "production", defaultCookieAttributes: { httpOnly: true, secure: env.NODE_ENV === "production", sameSite: env.NODE_ENV === "production" ? "none" : "lax" } },
+    session: {
+      expiresIn: 60 * 60 * 24 * 7,
+      updateAge: 60 * 60 * 24,
+      cookieCache: { enabled: true, maxAge: 60 },
+    },
+    advanced: {
+      useSecureCookies: env.NODE_ENV === "production",
+      defaultCookieAttributes: {
+        httpOnly: true,
+        secure: env.NODE_ENV === "production",
+        sameSite: env.NODE_ENV === "production" ? "none" : "lax",
+      },
+    },
     user: {
       additionalFields: {
         // Role IS accepted at signup — the user picks student/teacher on the sign-up form
-        // and it is stored in the `user` collection. OAuth / no-role signups default to
-        // "student" with roleSelected: false and must pick via /api/v1/me/select-role later.
-        role: { type: "string", required: false, defaultValue: "student", input: true, output: true },
-        roleSelected: { type: "boolean", required: false, defaultValue: false, input: false },
+        // and it is stored in the `user` collection. OAuth / no-role signups leave role
+        // undefined and must pick via /api/v1/me/select-role later.
+        role: {
+          type: "string",
+          required: false,
+          input: true,
+          output: true,
+        },
+        roleSelected: {
+          type: "boolean",
+          required: false,
+          defaultValue: false,
+          input: false,
+        },
       },
     },
-    databaseHooks: {
-      user: { create: { before: async (user: any) => {
-        const explicitlySelected = user.role === "student" || user.role === "teacher";
-        const role = assertSignupRole(user.role);
-        return { data: { ...user, role, roleSelected: explicitlySelected } };
-      } } },
-    },
+      databaseHooks: {
+        user: {
+          create: {
+            before: async (user: any) => {
+              const role = assertSignupRole(user.role);
+              // roleSelected stays false until the user explicitly picks via
+              // /select-role (or an admin action). OAuth/no-role users must
+              // complete onboarding; email/password users who already chose a
+              // role on signup will be sent to /select-role after sign-in and
+              // confirm it there.
+              return {
+                data: { ...user, role, roleSelected: false },
+              };
+            },
+          },
+        },
+      },
   } as any);
 }
 export type Auth = ReturnType<typeof createAuth>;

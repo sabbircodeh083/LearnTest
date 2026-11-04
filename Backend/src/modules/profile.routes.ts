@@ -6,8 +6,20 @@ import { requireEmailVerified } from "../auth/guards.js";
 import { ObjectId } from "mongodb";
 import { findUserByUserId } from "../services/user-roles.js";
 import {
-  Bookmark, Block, Comment, Entitlement, Exam, ExamAttempt, Follow, Purchase,
-  Question, Rating, Reaction, Video, Playlist, Profile,
+  Bookmark,
+  Block,
+  Comment,
+  Entitlement,
+  Exam,
+  ExamAttempt,
+  Follow,
+  Purchase,
+  Question,
+  Rating,
+  Reaction,
+  Video,
+  Playlist,
+  Profile,
 } from "../models/index.js";
 import { httpUrl } from "../common/schemas.js";
 const socialUrl = httpUrl.or(z.literal(""));
@@ -28,11 +40,13 @@ export function profileRouter(deps: { requireAuth: any; authDb?: () => any }) {
     emailVerified: user.emailVerified,
     name: profile?.name ?? "",
     role: user.role,
-    roleSelected: Boolean(user.roleSelected || profile?.roleSelected),
+    roleSelected: Boolean(user.roleSelected),
     bio: profile?.bio ?? "",
     avatarUploadId: profile?.avatarUploadId ?? null,
     coverUploadId: profile?.coverUploadId ?? null,
-    joinedAt: profile?.createdAt ? new Date(profile.createdAt).toISOString() : null,
+    joinedAt: profile?.createdAt
+      ? new Date(profile.createdAt).toISOString()
+      : null,
     status: profile?.status ?? "active",
     username: profile?.username ?? "",
     subject: profile?.subject ?? "",
@@ -76,7 +90,11 @@ export function profileRouter(deps: { requireAuth: any; authDb?: () => any }) {
           bio: z.string().max(1000).optional(),
           avatarUploadId: z.string().max(100).nullable().optional(),
           coverUploadId: z.string().max(100).nullable().optional(),
-          username: z.string().max(40).regex(/^[A-Za-z0-9_]*$/, "Letters, numbers and underscores only").optional(),
+          username: z
+            .string()
+            .max(40)
+            .regex(/^[A-Za-z0-9_]*$/, "Letters, numbers and underscores only")
+            .optional(),
           subject: z.string().max(80).optional(),
           university: z.string().max(160).optional(),
           degree: z.string().max(160).optional(),
@@ -111,7 +129,10 @@ export function profileRouter(deps: { requireAuth: any; authDb?: () => any }) {
     asyncHandler(async (req, res) => {
       // Role is deliberately NOT patchable here — role changes are admin/bootstrap workflows only.
       // A masked account number echoed back by a client is display-only.
-      if (typeof req.body?.payout?.accountNumber === "string" && req.body.payout.accountNumber.includes("•")) {
+      if (
+        typeof req.body?.payout?.accountNumber === "string" &&
+        req.body.payout.accountNumber.includes("•")
+      ) {
         delete req.body.payout.accountNumber;
       }
       const profile = await Profile.findOneAndUpdate(
@@ -131,14 +152,23 @@ export function profileRouter(deps: { requireAuth: any; authDb?: () => any }) {
       const userId = req.user!.id;
 
       const userCol = deps.authDb?.()?.collection("user");
-      if (!userCol) throw badRequest("Account deletion not available (auth database unavailable)");
+      if (!userCol)
+        throw badRequest(
+          "Account deletion not available (auth database unavailable)",
+        );
 
       let authUser = await findUserByUserId(deps.authDb, userId);
       if (!authUser && /^[0-9a-fA-F]{24}$/.test(userId)) {
-        authUser = (await userCol.findOne({ _id: new ObjectId(userId) }).catch(() => null)) ?? authUser;
+        authUser =
+          (await userCol
+            .findOne({ _id: new ObjectId(userId) })
+            .catch(() => null)) ?? authUser;
       }
       if (!authUser) {
-        authUser = (await userCol.findOne({ email: req.user!.email }).catch(() => null)) ?? authUser;
+        authUser =
+          (await userCol
+            .findOne({ email: req.user!.email })
+            .catch(() => null)) ?? authUser;
       }
       if (!authUser) throw notFound("Account not found");
 
@@ -160,10 +190,12 @@ export function profileRouter(deps: { requireAuth: any; authDb?: () => any }) {
             contentType: { $in: ["video", "playlist", "question", "exam"] },
             contentId: { $in: contentIds },
             status: "paid",
-          }).select("_id").lean();
+          })
+            .select("_id")
+            .lean();
           if (paidPurchase) {
             throw conflict(
-              "Cannot delete account: you have content with paid purchases. Students paid for access and their entitlements must be preserved."
+              "Cannot delete account: you have content with paid purchases. Students paid for access and their entitlements must be preserved.",
             );
           }
         }
@@ -184,16 +216,26 @@ export function profileRouter(deps: { requireAuth: any; authDb?: () => any }) {
         Entitlement.deleteMany({ userId: uid }).catch(() => undefined),
         // Reverse references: others who followed this user / rated this user as teacher.
         Follow.deleteMany({ teacherId: uid }).catch(() => undefined),
-        Rating.deleteMany({ targetType: "teacher", targetId: uid }).catch(() => undefined),
+        Rating.deleteMany({ targetType: "teacher", targetId: uid }).catch(
+          () => undefined,
+        ),
       ]);
 
       // Teacher-owned content: soft-delete to preserve purchase records.
       if (req.user!.role === "teacher") {
         await Promise.all([
-          Video.updateMany({ ownerId: uid }, { status: "hidden" }).catch(() => undefined),
-          Playlist.updateMany({ ownerId: uid }, { status: "hidden" }).catch(() => undefined),
-          Question.updateMany({ ownerId: uid }, { status: "hidden" }).catch(() => undefined),
-          Exam.updateMany({ ownerId: uid }, { status: "hidden" }).catch(() => undefined),
+          Video.updateMany({ ownerId: uid }, { status: "hidden" }).catch(
+            () => undefined,
+          ),
+          Playlist.updateMany({ ownerId: uid }, { status: "hidden" }).catch(
+            () => undefined,
+          ),
+          Question.updateMany({ ownerId: uid }, { status: "hidden" }).catch(
+            () => undefined,
+          ),
+          Exam.updateMany({ ownerId: uid }, { status: "hidden" }).catch(
+            () => undefined,
+          ),
         ]);
       }
 
@@ -203,19 +245,31 @@ export function profileRouter(deps: { requireAuth: any; authDb?: () => any }) {
       // Delete the auth user record.
       await userCol.deleteOne({ id: uid }).catch(() => undefined);
       if (/^[0-9a-fA-F]{24}$/.test(uid)) {
-        await userCol.deleteOne({ _id: new ObjectId(uid) }).catch(() => undefined);
+        await userCol
+          .deleteOne({ _id: new ObjectId(uid) })
+          .catch(() => undefined);
       }
 
       // Delete connected account records (credential password + OAuth links).
       const accountCol = deps.authDb?.()?.collection("account");
       if (accountCol) {
         await accountCol.deleteMany({ userId: uid }).catch(() => undefined);
+        if (/^[0-9a-fA-F]{24}$/.test(uid)) {
+          await accountCol
+            .deleteMany({ userId: new ObjectId(uid) })
+            .catch(() => undefined);
+        }
       }
 
       // Delete session records tied to this user.
       const sessionCol = deps.authDb?.()?.collection("session");
       if (sessionCol) {
         await sessionCol.deleteMany({ userId: uid }).catch(() => undefined);
+        if (/^[0-9a-fA-F]{24}$/.test(uid)) {
+          await sessionCol
+            .deleteMany({ userId: new ObjectId(uid) })
+            .catch(() => undefined);
+        }
       }
 
       await audit(
@@ -224,11 +278,11 @@ export function profileRouter(deps: { requireAuth: any; authDb?: () => any }) {
         "user",
         uid,
         req.requestId,
-        "Account deleted by owner"
+        "Account deleted by owner",
       );
 
       ok(res, { message: "Account deleted successfully" });
-    })
+    }),
   );
   r.post(
     "/select-role",
@@ -238,34 +292,45 @@ export function profileRouter(deps: { requireAuth: any; authDb?: () => any }) {
       // Onboarding: only users who have not selected a role may choose; never admin, never overwrite an established role.
       // The Better Auth `user` collection is authoritative for role + roleSelected.
       if (req.user!.roleSelected)
-        return res
-          .status(409)
-          .json({
-            success: false,
-            data: null,
-            error: { code: "CONFLICT", message: "Role already selected" },
-            requestId: req.requestId,
-          });
-      const profile: any = await Profile.findOne({ userId: req.user!.id });
-      if (profile?.roleSelected && !req.user!.roleSelected) {
-        // Legacy onboarding flag lives on the profile only — still counts as selected.
-        return res
-          .status(409)
-          .json({
-            success: false,
-            data: null,
-            error: { code: "CONFLICT", message: "Role already selected" },
-            requestId: req.requestId,
-          });
-      }
+        return res.status(409).json({
+          success: false,
+          data: null,
+          error: { code: "CONFLICT", message: "Role already selected" },
+          requestId: req.requestId,
+        });
       // Primary write: user collection owns the role.
-      await deps
-        .authDb?.()
-        ?.collection("user")
-        .updateOne(
-          { id: req.user!.id },
-          { $set: { role: req.body.role, roleSelected: true } },
-        );
+      // Better Auth mongodb adapter keys by `id`; try `_id` fallback for compatibility.
+      const userCol = deps.authDb?.()?.collection("user");
+      if (!userCol) throw badRequest("User database unavailable");
+      
+      let result = await userCol.updateOne(
+        { id: req.user!.id },
+        { $set: { role: req.body.role, roleSelected: true } },
+      );
+      
+      // If no document matched with `id`, try `_id` field
+      if (result.matchedCount === 0) {
+        const HEX24 = /^[0-9a-fA-F]{24}$/;
+        if (HEX24.test(req.user!.id)) {
+          const r1 = await userCol.updateOne(
+            { _id: new ObjectId(req.user!.id) },
+            { $set: { role: req.body.role, roleSelected: true } },
+          );
+          if (r1.matchedCount > 0) result = r1;
+        }
+        if (result.matchedCount === 0) {
+          const r2 = await userCol.updateOne(
+            { _id: req.user!.id as any },
+            { $set: { role: req.body.role, roleSelected: true } },
+          );
+          if (r2.matchedCount > 0) result = r2;
+        }
+      }
+      
+      if (result.matchedCount === 0) {
+        throw badRequest("User not found in database");
+      }
+      
       const updated = await Profile.findOneAndUpdate(
         { userId: req.user!.id },
         {

@@ -133,7 +133,8 @@ function ExamPreviewView({
   );
   const active = myAttempts.find((a) => a.state === "in_progress") ?? null;
   const used = myAttempts.length;
-  const exhausted = preview.maxAttempts != null && used >= preview.maxAttempts && !active;
+  const exhausted =
+    preview.maxAttempts != null && used >= preview.maxAttempts && !active;
   const attemptsLoading = mine.loading;
 
   const startAttempt = async () => {
@@ -213,12 +214,24 @@ function ExamPreviewView({
           <h1 className="mt-1 text-[26px] font-bold tracking-tight">
             {preview.title}
           </h1>
-          <p className="text-sm text-muted">by <Link href={`/student/teachers/${preview.ownerId}`} className="inline-flex items-center gap-1.5 font-semibold text-brandstrong hover:underline">
-            <AvatarImg uploadId={teacher.avatarUploadId} name={teacher.name} className="h-5 w-5 rounded-full text-[10px]" />
-            {teacher.name}
-          </Link></p>
+          <p className="text-sm text-muted">
+            by{" "}
+            <Link
+              href={`/student/teachers/${preview.ownerId}`}
+              className="inline-flex items-center gap-1.5 font-semibold text-brandstrong hover:underline"
+            >
+              <AvatarImg
+                uploadId={teacher.avatarUploadId}
+                name={teacher.name}
+                className="h-5 w-5 rounded-full text-[10px]"
+              />
+              {teacher.name}
+            </Link>
+          </p>
         </div>
-        <span className="ml-auto shrink-0"><SaveButton targetType="exam" targetId={String(preview._id)} /></span>
+        <span className="ml-auto shrink-0">
+          <SaveButton targetType="exam" targetId={String(preview._id)} />
+        </span>
       </div>
 
       <div className="mt-4 grid items-start gap-5 xl:grid-cols-3">
@@ -249,9 +262,14 @@ function ExamPreviewView({
               ) : (
                 <div>
                   {preview.maxAttempts == null ? (
-                    <>🔁 {used} attempt{used === 1 ? "" : "s"} used · No bound</>
+                    <>
+                      🔁 {used} attempt{used === 1 ? "" : "s"} used · No bound
+                    </>
                   ) : (
-                    <>🔁 {used} of {preview.maxAttempts} attempt{preview.maxAttempts === 1 ? "" : "s"} used</>
+                    <>
+                      🔁 {used} of {preview.maxAttempts} attempt
+                      {preview.maxAttempts === 1 ? "" : "s"} used
+                    </>
                   )}
                 </div>
               )}
@@ -275,7 +293,10 @@ function ExamPreviewView({
                   {preview.maxAttempts == null ? (
                     <>You have unlimited attempts (No bound).</>
                   ) : (
-                    <>You have {preview.maxAttempts} attempt{preview.maxAttempts === 1 ? "" : "s"}.</>
+                    <>
+                      You have {preview.maxAttempts} attempt
+                      {preview.maxAttempts === 1 ? "" : "s"}.
+                    </>
                   )}
                 </li>
               </ul>
@@ -453,16 +474,24 @@ function ExamPreviewView({
               <p className="mt-1.5 text-[13px] text-muted">
                 🏆 {preview.totalMarks} Marks · 📅{" "}
                 {preview.endsAt ? fmtDate(preview.endsAt) : "No deadline"} · 📄{" "}
-                {preview.maxAttempts == null ? `${used} attempts used · No bound` : `${used}/${preview.maxAttempts} attempts used`}
+                {preview.maxAttempts == null
+                  ? `${used} attempts used · No bound`
+                  : `${used}/${preview.maxAttempts} attempts used`}
               </p>
               {paid && !preview.entitled ? (
                 <div className="mt-3 rounded-lg border border-[#f5c518] bg-[#fffaeb] p-3 text-[13px] dark:bg-soft">
                   <p className="font-bold">Paid test — unlock to attempt.</p>
                   <p className="mt-0.5 text-muted">
                     {preview.maxAttempts == null ? (
-                      <>Pay once, then attempt as many times as you want (No bound).</>
+                      <>
+                        Pay once, then attempt as many times as you want (No
+                        bound).
+                      </>
                     ) : (
-                      <>Pay once, then attempt up to {preview.maxAttempts} time{preview.maxAttempts === 1 ? "" : "s"}.</>
+                      <>
+                        Pay once, then attempt up to {preview.maxAttempts} time
+                        {preview.maxAttempts === 1 ? "" : "s"}.
+                      </>
                     )}
                   </p>
                 </div>
@@ -493,8 +522,8 @@ function ExamPreviewView({
                     className="rounded-xl border border-line bg-soft px-4 py-3 text-center text-sm font-semibold text-muted"
                   >
                     You have used all {preview.maxAttempts} attempt
-                    {preview.maxAttempts === 1 ? "" : "s"}. Check Results & Feedback
-                    for your result.
+                    {preview.maxAttempts === 1 ? "" : "s"}. Check Results &
+                    Feedback for your result.
                   </p>
                 ) : (
                   <button
@@ -531,40 +560,45 @@ function ExamPreviewView({
       {/* paid alert */}
       {payAlert && (
         <ModalShell label="Paid test" onClose={() => setPayAlert(false)}>
-            <h2 className="text-lg font-bold">This is a paid test</h2>
-            <p className="mt-1 text-sm text-muted">
-              “{preview.title}” costs {currencySymbol(preview.currency)} {preview.price}. Pay first to unlock
-              {preview.maxAttempts == null ? (
-                <> unlimited attempts (No bound).</>
-              ) : (
-                <> your {preview.maxAttempts} attempt{preview.maxAttempts === 1 ? "" : "s"}.</>
-              )}
-            </p>
-            {note && (
-              <p
-                role="note"
-                className="mt-3 rounded-lg bg-warnsoft px-3 py-2 text-[13px] text-warn"
-              >
-                {note}
-              </p>
+          <h2 className="text-lg font-bold">This is a paid test</h2>
+          <p className="mt-1 text-sm text-muted">
+            “{preview.title}” costs {currencySymbol(preview.currency)}{" "}
+            {preview.price}. Pay first to unlock
+            {preview.maxAttempts == null ? (
+              <> unlimited attempts (No bound).</>
+            ) : (
+              <>
+                {" "}
+                your {preview.maxAttempts} attempt
+                {preview.maxAttempts === 1 ? "" : "s"}.
+              </>
             )}
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setPayAlert(false)}
-                className="rounded-xl border border-line px-5 py-2.5 text-sm font-semibold hover:bg-soft"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => void payFirst()}
-                disabled={busy !== null}
-                className="rounded-xl bg-[#16a34a] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#15803d] disabled:opacity-50"
-              >
-                {busy === "pay" ? "Starting checkout…" : "Pay First"}
-              </button>
-            </div>
+          </p>
+          {note && (
+            <p
+              role="note"
+              className="mt-3 rounded-lg bg-warnsoft px-3 py-2 text-[13px] text-warn"
+            >
+              {note}
+            </p>
+          )}
+          <div className="mt-5 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setPayAlert(false)}
+              className="rounded-xl border border-line px-5 py-2.5 text-sm font-semibold hover:bg-soft"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void payFirst()}
+              disabled={busy !== null}
+              className="rounded-xl bg-[#16a34a] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#15803d] disabled:opacity-50"
+            >
+              {busy === "pay" ? "Starting checkout…" : "Pay First"}
+            </button>
+          </div>
         </ModalShell>
       )}
     </>
@@ -578,27 +612,54 @@ function PreviewInner() {
   const fromParam = search.get("from");
   const playlistId = search.get("playlistId");
   const vParam = search.get("v");
-  const playlistBack = playlistId ? `/student/playlists/${playlistId}${vParam ? `?v=${vParam}` : ""}` : "/student/my-exams";
+  const playlistBack = playlistId
+    ? `/student/playlists/${playlistId}${vParam ? `?v=${vParam}` : ""}`
+    : "/student/my-exams";
   const backHref =
-    fromParam === "playlist" ? playlistBack
-    : fromParam === "saved" ? "/student/saved-content" : fromParam === "purchases" ? "/student/purchases" : fromParam === "home" ? "/student?tab=tests" : "/student/my-exams";
+    fromParam === "playlist"
+      ? playlistBack
+      : fromParam === "saved"
+        ? "/student/saved-content"
+        : fromParam === "purchases"
+          ? "/student/purchases"
+          : fromParam === "home"
+            ? "/student?tab=tests"
+            : "/student/my-exams";
   const backLabel =
-    fromParam === "playlist" ? "Playlist"
-    : fromParam === "saved" ? "Saved Content" : fromParam === "purchases" ? "Purchased Content" : fromParam === "home" ? "Practice with Tests" : "Tests";
-  const playlistSuffix = fromParam === "playlist" && playlistId ? `&from=playlist&playlistId=${encodeURIComponent(playlistId)}${vParam ? `&v=${encodeURIComponent(vParam)}` : ""}` : "";
+    fromParam === "playlist"
+      ? "Playlist"
+      : fromParam === "saved"
+        ? "Saved Content"
+        : fromParam === "purchases"
+          ? "Purchased Content"
+          : fromParam === "home"
+            ? "Practice with Tests"
+            : "Tests";
+  const playlistSuffix =
+    fromParam === "playlist" && playlistId
+      ? `&from=playlist&playlistId=${encodeURIComponent(playlistId)}${vParam ? `&v=${encodeURIComponent(vParam)}` : ""}`
+      : "";
   const returnTo = `/student/tests/${encodeURIComponent(id)}?${fromParam === "saved" ? "from=saved" : fromParam === "purchases" ? "from=purchases" : fromParam === "home" ? "from=home" : ""}${playlistSuffix || (fromParam !== "saved" && fromParam !== "purchases" && fromParam !== "home" && fromParam !== "playlist" ? "from=tests" : "")}`;
 
-  const examPreview = useFetch(() => apiGet<ExamPreview>(`/api/v1/exams/${id}/preview`), [id]);
+  const examPreview = useFetch(
+    () => apiGet<ExamPreview>(`/api/v1/exams/${id}/preview`),
+    [id],
+  );
   const teachers = useFetch(
     () =>
-      apiGet<Page<{ userId: string; name: string; avatarUploadId: string | null }>>(
-        `/api/v1/teachers${qs({ limit: 100 })}`,
-      ),
+      apiGet<
+        Page<{ userId: string; name: string; avatarUploadId: string | null }>
+      >(`/api/v1/teachers${qs({ limit: 100 })}`),
     [],
   );
   const teacherOf = (ownerId: string) => {
-    const t = (teachers.data?.items ?? []).find((x) => String(x.userId) === String(ownerId));
-    return { name: t?.name || "Teacher", avatarUploadId: t?.avatarUploadId ?? null };
+    const t = (teachers.data?.items ?? []).find(
+      (x) => String(x.userId) === String(ownerId),
+    );
+    return {
+      name: t?.name || "Teacher",
+      avatarUploadId: t?.avatarUploadId ?? null,
+    };
   };
 
   const loading = examPreview.loading;

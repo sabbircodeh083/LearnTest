@@ -20,10 +20,10 @@ describe("bcrypt via Better Auth callbacks contract (§19.1)", () => {
 });
 
 describe("role-based signup (§19.2)", () => {
-  it("allows student/teacher, defaults empty to student", () => {
+  it("allows student/teacher, leaves empty undefined (OAuth/no-role)", () => {
     expect(assertSignupRole("student")).toBe("student");
     expect(assertSignupRole("teacher")).toBe("teacher");
-    expect(assertSignupRole(undefined)).toBe("student");
+    expect(assertSignupRole(undefined)).toBeUndefined();
   });
   it("rejects admin and any other role at public signup", () => {
     expect(() => assertSignupRole("admin")).toThrow();

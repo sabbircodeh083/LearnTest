@@ -18,8 +18,8 @@ async function main() {
     const db = await connectDatabase();
     const auth = createAuth(db);
     authHandler = toNodeHandler(auth.handler as any);
-    sessionResolver = defaultResolver(auth as any);
-    getAuthDb = () => getMongoDb();
+    getAuthDb = () => getMongoDb();  // Define BEFORE using it
+    sessionResolver = defaultResolver(auth as any, getAuthDb);
   } else {
     logger.warn(
       "MONGODB_URI not set — auth/DB routes will return 503/NOT_READY. Set it in .env (MongoDB Atlas).",

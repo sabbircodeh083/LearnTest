@@ -42,6 +42,9 @@ const securityHeaders = [
 const nextConfig = {
   reactStrictMode: true,
   outputFileTracingRoot: projectDir,
+  async rewrites() {
+    return [{ source: "/api/:path*", destination: `${apiOrigin}/api/:path*` }];
+  },
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },

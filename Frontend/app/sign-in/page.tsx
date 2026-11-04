@@ -52,7 +52,6 @@ function SignInForm() {
       const me = await refresh();
       if (!me) { setServerError("Signed in, but we could not load your profile. Is the API running?"); return; }
       if (returnTo) router.replace(returnTo);
-      else if (!me.roleSelected && me.role !== "admin") router.replace("/select-role");
       else router.replace(roleHome(me.role));
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : "Sign-in failed.";
@@ -101,7 +100,7 @@ function SignInForm() {
   const social = async (provider: "google" | "github") => {
     try {
       const data = await apiPost<{ url?: string }>("/api/auth/sign-in/social", {
-        provider, callbackURL: `${window.location.origin}/select-role`,
+        provider, callbackURL: `${window.location.origin}/`,
       });
       if (data?.url && safeExternalUrl(data.url)) window.location.href = data.url;
       else window.location.href = `${API_BASE}/api/auth/sign-in/${provider}`;

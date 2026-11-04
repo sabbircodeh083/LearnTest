@@ -42,7 +42,8 @@ export function passwordByteLength(password: string): number {
 
 /** All policy violations, in display order. Empty means the password is valid. */
 export function validatePassword(password: unknown): string[] {
-  if (typeof password !== "string" || password.length === 0) return ["Password is required."];
+  if (typeof password !== "string" || password.length === 0)
+    return ["Password is required."];
   if (password.trim().length === 0) return ["Password cannot be only spaces."];
 
   const errors: string[] = [];
@@ -52,12 +53,17 @@ export function validatePassword(password: unknown): string[] {
     errors.push(`Password must be at least ${PASSWORD_MIN_LENGTH} characters.`);
   }
   if (passwordByteLength(password) > PASSWORD_MAX_BYTES) {
-    errors.push(`Password must be ${PASSWORD_MAX_BYTES} bytes or fewer (about ${PASSWORD_MAX_BYTES} characters).`);
+    errors.push(
+      `Password must be ${PASSWORD_MAX_BYTES} bytes or fewer (about ${PASSWORD_MAX_BYTES} characters).`,
+    );
   }
 
   const classes = passwordClasses(password);
-  if (!classes.upper) errors.push("Password must include at least one uppercase letter.");
-  if (!classes.lower) errors.push("Password must include at least one lowercase letter.");
-  if (!classes.symbol) errors.push("Password must include at least one symbol.");
+  if (!classes.upper)
+    errors.push("Password must include at least one uppercase letter.");
+  if (!classes.lower)
+    errors.push("Password must include at least one lowercase letter.");
+  if (!classes.symbol)
+    errors.push("Password must include at least one symbol.");
   return errors;
 }
