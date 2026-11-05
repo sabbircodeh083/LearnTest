@@ -8,8 +8,19 @@ import { useFetch } from "@/lib/hooks";
 import { fmtDate } from "@/lib/types";
 
 interface ReportRow { _id: string; reporterId: string; reason: string; status: string; createdAt: string }
+interface ContentDoc {
+  title?: string;
+  prompt?: string;
+  description?: string;
+  content?: string;
+  status?: string;
+  moderationState?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  youtubeId?: string;
+}
 interface ContentDetail {
-  doc: Record<string, any>;
+  doc: ContentDoc;
   owner: { userId: string; email: string; name: string; status: string } | null;
   reportCount: number;
   recentReports: ReportRow[];
