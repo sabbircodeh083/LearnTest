@@ -71,13 +71,14 @@ export function RoleGuard({ role, children }: { role: Role; children: ReactNode 
   useEffect(() => {
     if (loading) return;
     if (!user) { router.replace("/sign-in"); return; }
-    if (!user.roleSelected && user.role !== "admin") return; // role-select modal in the layout handles it
+    // Only users without a completed role choice are sent to onboarding.
+    if (!user.roleSelected && user.role !== "admin") { router.replace("/select-role"); return; }
     if (user.role !== role) router.replace(roleHome(user.role));
   }, [user, loading, role, router]);
 
   if (loading) return <div className="p-8 text-sm text-muted" aria-busy="true">Checking your session…</div>;
   if (!user) return <div className="p-8 text-sm text-muted">Redirecting…</div>;
-  if (!user.roleSelected && user.role !== "admin") return null; // modal appears in layout
+  if (!user.roleSelected && user.role !== "admin") return <div className="p-8 text-sm text-muted">Redirecting…</div>;
   if (user.role !== role) return <div className="p-8 text-sm text-muted">Redirecting…</div>;
   return <>{children}</>;
 }

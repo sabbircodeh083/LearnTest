@@ -8,6 +8,8 @@ export interface Me {
   name: string;
   role: Role;
   roleSelected: boolean;
+  /** False for OAuth-only accounts: deletion needs no password to verify. */
+  hasPassword: boolean;
   bio: string;
   avatarUploadId: string | null;
   coverUploadId: string | null;

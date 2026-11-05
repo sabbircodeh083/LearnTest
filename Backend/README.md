@@ -66,6 +66,9 @@ SMTP_FROM=noreply@yourdomain.com
 ### Optional (for full features)
 
 ```env
+# Post-verification landing page (defaults to ${FRONTEND_URL}/sign-in)
+EMAIL_VERIFICATION_REDIRECT_URL=http://localhost:3000/sign-in
+
 # OAuth Social Login
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
@@ -140,9 +143,14 @@ The platform supports three roles:
 - **Teacher**: Can create content, grade submissions, earn from sales
 - **Admin**: Full system access, user management, moderation
 
-### OAuth Role Selection Flow
+### Role Selection Flow
 
-**New OAuth users** (Google/GitHub) go through an onboarding flow:
+Users only see the role selection page when `roleSelected` is still `false`:
+
+- **Manual sign-up**: the sign-up form includes a Student/Teacher choice, so the account is created with `roleSelected: true` and goes straight to that workspace after verification and sign-in.
+- **OAuth sign-up** (Google/GitHub): no role is supplied, so the account is created with `roleSelected: false`.
+
+**New OAuth users** therefore go through onboarding:
 
 1. User signs in with OAuth → Account created with `roleSelected: false`
 2. Redirected to role selection page
@@ -155,6 +163,31 @@ The platform supports three roles:
 - Endpoint: `POST /api/v1/me/select-role` (body: `{role: "student" | "teacher"}`)
 - Returns `409 Conflict` if role already selected
 - Database update handles both `id` and `_id` MongoDB field formats
+
+### Account Deletion
+
+`DELETE /api/v1/me` permanently deletes the account and its data.
+
+- **Email/password accounts:** the body must include the current `password`.
+  It is verified against the bcrypt hash stored in Better Auth's `account`
+  collection (`providerId: "credential"`, related by
+  `account.userId === user.id`) **before** any data is deleted. A wrong or
+  missing password returns `400 INVALID_PASSWORD`.
+- **OAuth-only accounts:** no credential account/password exists, so the
+  authenticated session is sufficient.
+- `GET /api/v1/me` returns `hasPassword` so the frontend knows whether to ask
+  for a password.
+- Teachers with content that has paid purchases cannot be deleted (existing
+  safeguard).
+- Shared bcrypt helpers live in `src/auth/credentials.ts`, so login and
+  deletion always use the same hashing/verification configuration.
+
+### Email Verification
+
+Verification links redirect to the frontend sign-in page
+(`EMAIL_VERIFICATION_REDIRECT_URL`, defaults to `${FRONTEND_URL}/sign-in`)
+with `?verified=1`. `autoSignInAfterVerification` is disabled, so users verify
+their address and then sign in explicitly.
 
 ### Creating First Admin
 
@@ -174,6 +207,8 @@ ADMIN_EMAIL=your@email.com npm run create-admin
 - ✅ Role-based access control
 - ✅ Session-based auth (HTTP-only cookies)
 - ✅ Email verification required for protected features
+- ✅ Account deletion re-verifies the current password (OAuth-only accounts exempt)
+- ✅ Verification links land on the frontend sign-in page
 
 ## 📁 Project Structure
 
@@ -182,6 +217,7 @@ Backend/
 ├── src/
 │   ├── auth/           # Authentication & authorization
 │   │   ├── auth.ts     # Better Auth configuration
+│   │   ├── credentials.ts  # bcrypt helpers + credential-account lookup
 │   │   ├── guards.ts   # Session resolver, role guards
 │   │   └── password-policy.ts
 │   ├── common/         # Shared utilities
@@ -199,7 +235,7 @@ Backend/
 │   │   ├── content.routes.ts
 │   │   ├── engagement.routes.ts
 │   │   ├── learning.routes.ts
-│   │   ├── profile.routes.ts  # Includes role selection
+│   │   ├── profile.routes.ts  # Profile, role selection, account deletion
 │   │   ├── uploads.routes.ts
 │   │   └── payments/
 │   ├── services/       # Business logic & external services
@@ -264,9 +300,10 @@ When running in development mode:
 - `POST /api/auth/sign-out` - Sign out
 
 #### Profile
-- `GET /api/v1/me` - Get current user profile & role
+- `GET /api/v1/me` - Get current user profile, role & `hasPassword`
 - `PATCH /api/v1/me` - Update profile (not role)
-- `POST /api/v1/me/select-role` - OAuth role selection (once)
+- `DELETE /api/v1/me` - Delete account (password required for email/password accounts)
+- `POST /api/v1/me/select-role` - Role selection while `roleSelected=false` (e.g. OAuth onboarding)
 
 #### Content (Students)
 - `GET /api/v1/videos` - List videos
@@ -324,12 +361,13 @@ The server handles `SIGTERM` and `SIGINT` signals:
 
 ## 🛠️ Troubleshooting
 
-### OAuth Role Selection Issues
+### Role Selection Issues
 
-**Modal keeps appearing after selection:**
+**Role page keeps appearing after selection:**
 - Check backend logs for database update success
 - Verify `getAuthDb` is initialized before `defaultResolver` in `server.ts`
-- Ensure MongoDB user document has `roleSelected: true` after selection
+- Ensure the MongoDB `user` document has `roleSelected: true` after selection
+- Manual signup supplies a role, so the create hook must set `roleSelected: true`
 
 **Database update fails:**
 - User documents may use `_id` instead of `id` field
@@ -347,6 +385,12 @@ The server handles `SIGTERM` and `SIGINT` signals:
 - SMTP not configured
 - Check `SMTP_*` environment variables
 - Check email spam folder
+
+**Verification link shows a JSON 404 after the email is verified**
+- The link's `callbackURL` fell back to `/` (the API host root)
+- Set `EMAIL_VERIFICATION_REDIRECT_URL` to the frontend sign-in page
+  (`https://your-frontend/sign-in`) and resend the verification email
+- Old emails keep their original callback; resend them after deploying
 
 **OAuth callback errors**
 - Verify callback URLs match in provider console

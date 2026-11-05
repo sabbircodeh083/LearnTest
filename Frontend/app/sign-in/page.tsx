@@ -17,7 +17,11 @@ function SignInForm() {
   const rawReturn = search.get("returnTo");
   const returnTo = safeReturnTo(rawReturn) || null;
   const resetDone = search.get("reset") === "1";
-  const invalidResetToken = search.get("error") === "INVALID_TOKEN";
+  const verifyError = search.get("error");
+  const verifyFlow = search.get("verified") === "1";
+  const justVerified = verifyFlow && !verifyError;
+  const verifyFailed = verifyFlow && (verifyError === "INVALID_TOKEN" || verifyError === "TOKEN_EXPIRED");
+  const invalidResetToken = !verifyFlow && (verifyError === "INVALID_TOKEN" || verifyError === "TOKEN_EXPIRED");
   const { refresh } = useAuth();
   // Signed-in users cannot stay on this page — sent to their workspace.
   const { user, loading: authLoading } = useRedirectIfSignedIn(returnTo);
@@ -51,7 +55,9 @@ function SignInForm() {
       await apiPost("/api/auth/sign-in/email", { email: form.email.trim(), password: form.password });
       const me = await refresh();
       if (!me) { setServerError("Signed in, but we could not load your profile. Is the API running?"); return; }
-      if (returnTo) router.replace(returnTo);
+      // Role onboarding comes first; only users without a selected role see it.
+      if (!me.roleSelected && me.role !== "admin") router.replace("/select-role");
+      else if (returnTo) router.replace(returnTo);
       else router.replace(roleHome(me.role));
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : "Sign-in failed.";
@@ -66,7 +72,7 @@ function SignInForm() {
     try {
       await apiPost("/api/auth/send-verification-email", {
         email: form.email.trim(),
-        callbackURL: `${window.location.origin}/sign-in`,
+        callbackURL: `${window.location.origin}/sign-in?verified=1`,
       });
       setResent(true); setCooldown(60);
     } catch (err) {
@@ -123,6 +129,8 @@ function SignInForm() {
     <AuthCard title="Welcome back" sub="Sign in with the email you registered with.">
       <form onSubmit={submit} noValidate className="space-y-4">
         {serverError && <Notice tone="red">{serverError}</Notice>}
+        {justVerified && <Notice tone="blue">Your email is verified. Sign in to continue.</Notice>}
+        {verifyFailed && <Notice tone="red">That verification link is invalid or has expired. Sign in, then choose “Resend verification email”.</Notice>}
         {resetDone && <Notice tone="blue">Password updated. Sign in with your new password.</Notice>}
         {invalidResetToken && <Notice tone="red">That reset link is invalid or has expired. Request a new one below.</Notice>}
         {unverified && (

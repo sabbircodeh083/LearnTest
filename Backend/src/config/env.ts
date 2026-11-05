@@ -17,6 +17,9 @@ const schema = z.object({
     .optional(),
   BETTER_AUTH_URL: z.string().url().default("http://localhost:4000"),
   BETTER_AUTH_TRUSTED_ORIGINS: z.string().default("http://localhost:3000"),
+  // Where verification links send the user after the address is verified.
+  // Must be a trusted frontend origin. Defaults to ${FRONTEND_URL}/sign-in.
+  EMAIL_VERIFICATION_REDIRECT_URL: z.string().url().optional(),
   GOOGLE_CLIENT_ID: z.string().optional().default(""),
   GOOGLE_CLIENT_SECRET: z.string().optional().default(""),
   GITHUB_CLIENT_ID: z.string().optional().default(""),

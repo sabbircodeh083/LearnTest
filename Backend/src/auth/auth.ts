@@ -1,9 +1,9 @@
 import { randomBytes } from "crypto";
 import { betterAuth } from "better-auth";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
-import bcrypt from "bcrypt";
 import type { Db } from "mongodb";
 import { env, trustedOrigins } from "../config/env.js";
+import { hashPassword, verifyPassword } from "./credentials.js";
 import { sendAuthEmail } from "../services/mail.js";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { PASSWORD_MIN_LENGTH, validatePassword } from "./password-policy.js";
@@ -24,6 +24,43 @@ export function assertSignupRole(role: unknown): string | undefined {
   throw new APIError("BAD_REQUEST", {
     message: "Role must be student or teacher",
   }); // admin can never self-assign
+}
+
+/** Role state applied when a user document is created. A role supplied by the
+ *  manual sign-up form is a completed onboarding choice (roleSelected=true);
+ *  OAuth/no-role signups stay unselected and are sent to /select-role later. */
+export function signupRoleState(role: unknown): {
+  role: string | undefined;
+  roleSelected: boolean;
+} {
+  const resolved = assertSignupRole(role);
+  return { role: resolved, roleSelected: Boolean(resolved) };
+}
+
+/** Frontend URL the user is sent to after a verification link is opened.
+ *  Never fall back to "/" — that resolves to the API host root and shows a
+ *  JSON 404 after the email has already been verified. */
+function verificationRedirectUrl(): string {
+  const base = (
+    env.EMAIL_VERIFICATION_REDIRECT_URL ?? `${env.FRONTEND_URL}/sign-in`
+  ).replace(/\/$/, "");
+  return `${base}${base.includes("?") ? "&" : "?"}verified=1`;
+}
+
+/** Better Auth embeds the post-verification redirect in the link as
+ *  `callbackURL`. When the client does not send one it defaults to "/", so
+ *  rewrite that (and only that) to the frontend sign-in page. */
+export function withVerificationRedirect(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const callback = parsed.searchParams.get("callbackURL");
+    if (!callback || callback === "/") {
+      parsed.searchParams.set("callbackURL", verificationRedirectUrl());
+    }
+    return parsed.toString();
+  } catch {
+    return url; // malformed URL — send the original rather than break the link
+  }
 }
 
 export function createAuth(db: Db) {
@@ -57,14 +94,9 @@ export function createAuth(db: Db) {
       maxPasswordLength: 128,
       revokeSessionsOnPasswordReset: true,
       password: {
-        hash: async (password: string) => bcrypt.hash(password, 12),
-        verify: async ({
-          hash,
-          password,
-        }: {
-          hash: string;
-          password: string;
-        }) => bcrypt.compare(password, hash),
+        hash: (password: string) => hashPassword(password),
+        verify: ({ hash, password }: { hash: string; password: string }) =>
+          verifyPassword(hash, password),
       },
       sendResetPassword: async ({ user, url }: any) => {
         await sendAuthEmail(user.email, "Reset your LearnTest password", url);
@@ -92,10 +124,16 @@ export function createAuth(db: Db) {
     },
     emailVerification: {
       sendOnSignUp: true,
-      autoSignInAfterVerification: true,
+      // Verification proves ownership of the address; the user then signs in
+      // explicitly so the flow always ends on the login page.
+      autoSignInAfterVerification: false,
       expiresIn: 3600,
       sendVerificationEmail: async ({ user, url }: any) => {
-        await sendAuthEmail(user.email, "Verify your LearnTest email", url);
+        await sendAuthEmail(
+          user.email,
+          "Verify your LearnTest email",
+          withVerificationRedirect(url),
+        );
       },
     },
     socialProviders: social as any,
@@ -135,14 +173,12 @@ export function createAuth(db: Db) {
         user: {
           create: {
             before: async (user: any) => {
-              const role = assertSignupRole(user.role);
-              // roleSelected stays false until the user explicitly picks via
-              // /select-role (or an admin action). OAuth/no-role users must
-              // complete onboarding; email/password users who already chose a
-              // role on signup will be sent to /select-role after sign-in and
-              // confirm it there.
+              // Manual sign-up picks a role in the form, so onboarding is done
+              // immediately. OAuth/no-role users keep roleSelected=false and
+              // choose via /select-role after their first sign-in.
+              const { role, roleSelected } = signupRoleState(user.role);
               return {
-                data: { ...user, role, roleSelected: false },
+                data: { ...user, role, roleSelected },
               };
             },
           },

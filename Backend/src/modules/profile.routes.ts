@@ -1,8 +1,17 @@
 import { Router } from "express";
 import { z } from "zod";
 import { asyncHandler, ok, validate } from "../common/middleware.js";
-import { badRequest, conflict, notFound } from "../common/errors.js";
+import {
+  badRequest,
+  conflict,
+  invalidPassword,
+  notFound,
+} from "../common/errors.js";
 import { requireEmailVerified } from "../auth/guards.js";
+import {
+  findCredentialAccount,
+  verifyPassword,
+} from "../auth/credentials.js";
 import { ObjectId } from "mongodb";
 import { findUserByUserId } from "../services/user-roles.js";
 import {
@@ -34,13 +43,16 @@ export function profileRouter(deps: { requireAuth: any; authDb?: () => any }) {
     const s = typeof v === "string" ? v : "";
     return s ? `••••${s.slice(-4)}` : "";
   };
-  const safe = (user: any, profile: any) => ({
+  const safe = (user: any, profile: any, hasPassword = false) => ({
     id: user.id,
     email: user.email,
     emailVerified: user.emailVerified,
     name: profile?.name ?? "",
     role: user.role,
     roleSelected: Boolean(user.roleSelected),
+    // Whether account deletion must ask for a password. OAuth-only accounts
+    // have no credential account and therefore no password to verify.
+    hasPassword,
     bio: profile?.bio ?? "",
     avatarUploadId: profile?.avatarUploadId ?? null,
     coverUploadId: profile?.coverUploadId ?? null,
@@ -76,8 +88,11 @@ export function profileRouter(deps: { requireAuth: any; authDb?: () => any }) {
     "/",
     requireAuth,
     asyncHandler(async (req, res) => {
-      const profile = await Profile.findOne({ userId: req.user!.id }).lean();
-      ok(res, safe(req.user, profile));
+      const [profile, credential] = await Promise.all([
+        Profile.findOne({ userId: req.user!.id }).lean(),
+        findCredentialAccount(deps.authDb, req.user!.id),
+      ]);
+      ok(res, safe(req.user, profile, Boolean(credential?.password)));
     }),
   );
   r.patch(
@@ -135,19 +150,24 @@ export function profileRouter(deps: { requireAuth: any; authDb?: () => any }) {
       ) {
         delete req.body.payout.accountNumber;
       }
-      const profile = await Profile.findOneAndUpdate(
-        { userId: req.user!.id },
-        { $set: req.body },
-        { returnDocument: "after", upsert: true, setDefaultsOnInsert: true },
-      );
-      ok(res, safe(req.user, profile?.toObject()));
+      const [profile, credential] = await Promise.all([
+        Profile.findOneAndUpdate(
+          { userId: req.user!.id },
+          { $set: req.body },
+          { returnDocument: "after", upsert: true, setDefaultsOnInsert: true },
+        ),
+        findCredentialAccount(deps.authDb, req.user!.id),
+      ]);
+      ok(res, safe(req.user, profile?.toObject(), Boolean(credential?.password)));
     }),
   );
   r.delete(
     "/",
     requireAuth,
     requireEmailVerified,
-    validate(z.object({ password: z.string().min(1, "Password is required") })),
+    // Password is required only for credential (email/password) accounts;
+    // OAuth-only accounts have nothing to verify.
+    validate(z.object({ password: z.string().max(128).optional() })),
     asyncHandler(async (req, res) => {
       const userId = req.user!.id;
 
@@ -172,8 +192,24 @@ export function profileRouter(deps: { requireAuth: any; authDb?: () => any }) {
       }
       if (!authUser) throw notFound("Account not found");
 
-      // Password verification intentionally skipped — session auth (requireAuth +
-      // requireEmailVerified) already proves identity.
+      // Re-verify the current password before any destructive work. A stolen
+      // session alone must not be enough to delete the account. Password
+      // hashes live in the `account` collection (related by userId), not in
+      // `user`. OAuth-only accounts have no credential record, so they delete
+      // with the authenticated session alone.
+      const canonicalUserId = String(
+        authUser.id ?? authUser._id ?? userId,
+      );
+      const credential = await findCredentialAccount(
+        deps.authDb,
+        canonicalUserId,
+      );
+      if (credential?.password) {
+        const password = req.body.password ?? "";
+        if (!password) throw invalidPassword("Password is required.");
+        const matches = await verifyPassword(credential.password, password);
+        if (!matches) throw invalidPassword();
+      }
 
       // Teacher precondition: block if they own content with paid purchases
       // (students paid for access — their entitlements must be preserved).
@@ -349,11 +385,16 @@ export function profileRouter(deps: { requireAuth: any; authDb?: () => any }) {
         req.user!.id,
         req.requestId,
       );
+      const credential = await findCredentialAccount(
+        deps.authDb,
+        req.user!.id,
+      );
       ok(
         res,
         safe(
           { ...req.user, role: req.body.role, roleSelected: true },
           updated?.toObject(),
+          Boolean(credential?.password),
         ),
       );
     }),

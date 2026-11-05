@@ -14,9 +14,10 @@ GET /api/v1/ready
 Better Auth handles signup/sign-in/OAuth under `/api/auth/*` (see Swagger `/api/docs`). Then call:
 
 ```http
-GET   /api/v1/me                 🔒  Get my profile + stored role
+GET   /api/v1/me                 🔒  Get my profile + stored role (includes hasPassword)
 PATCH /api/v1/me                 🔒  Body: { "name"?, "bio"?, "avatarUploadId"? } (role not editable)
-POST  /api/v1/me/select-role     🔒  Body: { "role": "student" | "teacher" } (first OAuth login only)
+DELETE /api/v1/me                🔒  Body: { "password"? } (password required for email/password accounts)
+POST  /api/v1/me/select-role     🔒  Body: { "role": "student" | "teacher" } (only while roleSelected=false, e.g. OAuth signup)
 ```
 
 ## Videos — list/detail are public-ish, writes need teacher/admin `🔒`

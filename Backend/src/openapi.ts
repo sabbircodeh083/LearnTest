@@ -35,7 +35,7 @@ export const openapi = {
     "/api/auth/sign-up/email": {
       post: {
         summary:
-          "Better Auth signup — body: {name,email,password,role?: student|teacher}; admin rejected",
+          "Better Auth signup — body: {name,email,password,role?: student|teacher}; a supplied role completes onboarding (roleSelected=true); admin rejected",
         responses: {
           "200": { description: "Created (verification email sent)" },
           "400": { description: "Validation / role error" },
@@ -54,7 +54,7 @@ export const openapi = {
     },
     "/api/v1/me": {
       get: {
-        summary: "Current profile/role",
+        summary: "Current profile/role (includes hasPassword)",
         security: [{ cookieAuth: [] }],
         responses: {
           "200": { description: "Profile" },
@@ -67,6 +67,15 @@ export const openapi = {
         responses: {
           "200": { description: "Profile" },
           "400": { description: "Validation" },
+        },
+      },
+      delete: {
+        summary:
+          "Delete my account and data — password is required for email/password accounts, optional for OAuth-only accounts",
+        security: [{ cookieAuth: [] }],
+        responses: {
+          "200": { description: "Deleted" },
+          "400": { description: "Incorrect or missing password" },
         },
       },
     },

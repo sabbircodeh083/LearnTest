@@ -131,9 +131,11 @@ function DeleteAccountSection() {
   const [error, setError] = useState("");
   const [password, setPassword] = useState("");
   const [confirmText, setConfirmText] = useState("");
+  // Password accounts must re-verify their password; OAuth-only accounts have none.
+  const needsPassword = Boolean(user?.hasPassword);
 
   const handleDelete = async () => {
-    if (!password) {
+    if (needsPassword && !password) {
       setError("Password is required.");
       return;
     }
@@ -144,7 +146,7 @@ function DeleteAccountSection() {
     setDeleting(true);
     setError("");
     try {
-      await apiDelete("/api/v1/me", { password });
+      await apiDelete("/api/v1/me", needsPassword ? { password } : {});
       await signOut();
       toast("Account deleted.");
       router.replace("/");
@@ -189,11 +191,17 @@ function DeleteAccountSection() {
             <div className="flex-1 overflow-y-auto p-5">
               {error && <p role="alert" className="mb-3 rounded-lg bg-dangersoft px-3 py-2 text-[13px] font-medium text-danger">{error}</p>}
               <div className="space-y-3">
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium">Enter your password</label>
-                  <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Password" className={inputCls} />
-                </div>
+                {needsPassword ? (
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium">Enter your password</label>
+                    <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Password" className={inputCls} autoComplete="current-password" />
+                  </div>
+                ) : (
+                  <p className="rounded-lg bg-soft px-3 py-2 text-[13px] text-muted">
+                    This account uses social sign-in, so there is no password to confirm.
+                  </p>
+                )}
                 <div>
                   <label className="mb-1.5 block text-sm font-medium">Type <span className="font-mono text-danger">DELETE</span> to confirm</label>
                   <input value={confirmText} onChange={(e) => setConfirmText(e.target.value)}
@@ -203,7 +211,7 @@ function DeleteAccountSection() {
             </div>
             <div className="flex justify-end gap-2 border-t border-line p-5">
               <Btn variant="ghost" onClick={() => setOpen(false)}>Cancel</Btn>
-              <Btn variant="danger" onClick={handleDelete} disabled={deleting || password === "" || confirmText !== "DELETE"}>
+              <Btn variant="danger" onClick={handleDelete} disabled={deleting || (needsPassword && password === "") || confirmText !== "DELETE"}>
                 {deleting ? "Deleting…" : "Delete Account"}
               </Btn>
             </div>

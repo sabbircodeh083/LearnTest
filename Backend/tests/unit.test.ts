@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import bcrypt from "bcrypt";
-import { assertSignupRole } from "../src/auth/auth.js";
+import { assertSignupRole, signupRoleState, withVerificationRedirect } from "../src/auth/auth.js";
 import { evaluateValidation, canTransition } from "../src/modules/payments/payment-state.js";
 import { mimeMatchesExt, PURPOSE_RULES } from "../src/modules/uploads.routes.js";
 import { formatZodError } from "../src/common/middleware.js";
@@ -19,6 +19,30 @@ describe("bcrypt via Better Auth callbacks contract (§19.1)", () => {
   });
 });
 
+describe("email verification redirect", () => {
+  const link = (callback: string) =>
+    `https://api.example.com/api/auth/verify-email?token=t&callbackURL=${encodeURIComponent(callback)}`;
+
+  it("replaces Better Auth's default '/' callback with the sign-in page", () => {
+    for (const callback of ["/", ""]) {
+      const parsed = new URL(withVerificationRedirect(link(callback)));
+      const redirect = parsed.searchParams.get("callbackURL") ?? "";
+      expect(redirect).not.toBe("/");
+      expect(redirect).toMatch(/\/sign-in\?verified=1$/);
+    }
+  });
+
+  it("keeps a client-supplied callback (e.g. the change-email flow)", () => {
+    const custom = "https://www.easylearntest.tech/settings";
+    const parsed = new URL(withVerificationRedirect(link(custom)));
+    expect(parsed.searchParams.get("callbackURL")).toBe(custom);
+  });
+
+  it("returns malformed URLs untouched", () => {
+    expect(withVerificationRedirect("not a url")).toBe("not a url");
+  });
+});
+
 describe("role-based signup (§19.2)", () => {
   it("allows student/teacher, leaves empty undefined (OAuth/no-role)", () => {
     expect(assertSignupRole("student")).toBe("student");
@@ -28,6 +52,14 @@ describe("role-based signup (§19.2)", () => {
   it("rejects admin and any other role at public signup", () => {
     expect(() => assertSignupRole("admin")).toThrow();
     expect(() => assertSignupRole("superuser")).toThrow();
+  });
+  it("marks role onboarding complete when a signup role was supplied", () => {
+    expect(signupRoleState("student")).toEqual({ role: "student", roleSelected: true });
+    expect(signupRoleState("teacher")).toEqual({ role: "teacher", roleSelected: true });
+  });
+  it("leaves OAuth/no-role signups unselected for /select-role", () => {
+    expect(signupRoleState(undefined)).toEqual({ role: undefined, roleSelected: false });
+    expect(signupRoleState("")).toEqual({ role: undefined, roleSelected: false });
   });
 });
 

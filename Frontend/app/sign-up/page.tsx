@@ -32,7 +32,15 @@ export default function SignUpPage() {
     if (Object.keys(errs).length) return;
     setBusy(true); setServerError("");
     try {
-      await apiPost("/api/auth/sign-up/email", { name: form.name.trim(), email: form.email.trim(), password: form.password, role: form.role });
+      await apiPost("/api/auth/sign-up/email", {
+        name: form.name.trim(),
+        email: form.email.trim(),
+        password: form.password,
+        role: form.role,
+        // Without this Better Auth falls back to "/" (the API host root) and
+        // the user lands on a JSON 404 after verifying.
+        callbackURL: `${window.location.origin}/sign-in?verified=1`,
+      });
       setDone(true);
     } catch (err) {
       setServerError(err instanceof ApiError ? err.message : "Sign-up failed. Please try again.");

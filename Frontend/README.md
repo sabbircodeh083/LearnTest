@@ -53,8 +53,9 @@ Frontend/
 │   ├── (auth)/            # Authentication pages
 │   │   ├── sign-in/
 │   │   ├── sign-up/
+│   │   ├── verify-email/
 │   │   └── reset-password/
-│   ├── select-role/       # OAuth role selection
+│   ├── select-role/       # Role selection when roleSelected=false (e.g. OAuth)
 │   ├── student/           # Student dashboard & features
 │   ├── teacher/           # Teacher studio & content management
 │   ├── admin/             # Admin panel
@@ -67,7 +68,7 @@ Frontend/
 │   ├── AlertDialog.tsx
 │   ├── AppShell.tsx      # Main app shell with navigation
 │   ├── AuthCard.tsx
-│   ├── RoleSelectModal.tsx  # Role selection modal
+│   ├── RoleSelectModal.tsx  # Legacy modal (unused; /select-role is canonical)
 │   ├── VideoPlayer.tsx
 │   └── ...
 ├── lib/                   # Utilities & hooks
@@ -87,15 +88,15 @@ Frontend/
 
 **New Users (Email/Password)**
 1. Sign up at `/sign-up`
-2. Choose student/teacher role during signup
-3. Verify email (check inbox/spam)
+2. Choose student/teacher role during signup — this saves `roleSelected: true`
+3. Verify email (check inbox/spam); the link lands on `/sign-in?verified=1`
 4. Sign in at `/sign-in`
-5. Redirected to role-specific dashboard
+5. Redirected straight to the chosen role's dashboard (no role prompt)
 
 **New Users (OAuth - Google/GitHub)**
 1. Click social login button at `/sign-in`
 2. Authorize with Google/GitHub
-3. **Role Selection**: Choose student or teacher
+3. **Role Selection**: Choose student or teacher at `/select-role`
 4. Redirected to role-specific dashboard
 
 **Returning Users**
@@ -105,22 +106,35 @@ Frontend/
    - Teachers → `/teacher`  
    - Admins → `/admin`
 
-### OAuth Role Selection
+### Role Selection
 
-When users sign in with Google or GitHub for the first time:
+The `/select-role` page is shown **only while `roleSelected` is `false`**
+(for example, first-time OAuth users):
 
-1. **Redirect to role selection** - Automatically shown `/select-role` page
+1. **Redirect to role selection** - `/` and `RoleGuard` send unselected users to `/select-role`
 2. **Choose role** - Select Student or Teacher (permanent choice)
 3. **Loading state** - Shows spinner: "Setting up your workspace, please wait..."
 4. **Save to database** - `POST /api/v1/me/select-role`
 5. **Redirect** - Full page reload to role-specific workspace
 
 **Technical Implementation:**
-- Root page (`/`) checks authentication status
+- Sign-in, `useRedirectIfSignedIn`, and `RoleGuard` all branch on `roleSelected`
+  before resolving a role home
 - If `!user.roleSelected` → redirects to `/select-role`
 - Role selection updates backend, then uses `window.location.href` for full reload
 - Full reload clears Better Auth's 60-second session cache
-- Modal removed from global layout (only route-based now)
+- Role selection is route-based; the legacy modal is not mounted
+
+### Account Deletion
+
+The delete-account drawer in student/teacher settings:
+
+- Requires the account password for email/password accounts. The backend
+  re-verifies it against the Better Auth `account` collection before deleting
+  anything.
+- Shows no password field for OAuth-only accounts (`user.hasPassword === false`),
+  since those have no credential/password.
+- Still requires typing `DELETE` to confirm.
 
 ### Session Management
 
@@ -174,7 +188,7 @@ When users sign in with Google or GitHub for the first time:
 - `/reset-password` - Password reset flow
 
 ### Authenticated Pages
-- `/select-role` - OAuth role selection (first-time only)
+- `/select-role` - Role selection while `roleSelected=false` (e.g. OAuth onboarding)
 - `/student/*` - Student dashboard & features
 - `/teacher/*` - Teacher studio & management
 - `/admin/*` - Admin panel (admin only)
@@ -321,7 +335,9 @@ NEXT_PUBLIC_API_BASE_URL=https://api.yourdomain.com
 - Backend `BETTER_AUTH_URL` misconfigured
 - Frontend and backend on different protocols (http vs https)
 
-**Role selection modal appears repeatedly**
+**Role selection page appears repeatedly**
+- Confirm the `user` document has `roleSelected: true` after choosing a role
+- Manual signup should set `roleSelected: true` when a role is supplied
 - Clear browser cookies and try again
 - Check backend logs for database update errors
 - Verify backend `getAuthDb` initialization order
