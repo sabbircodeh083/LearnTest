@@ -144,9 +144,37 @@ if (parsed.data.NODE_ENV === "production") {
     );
 }
 export const env = parsed.data;
-export const corsOrigins = env.CORS_ORIGINS.split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
-export const trustedOrigins = env.BETTER_AUTH_TRUSTED_ORIGINS.split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
+const splitList = (value: string) =>
+  value
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+/** Reduce a configured URL to its origin (scheme + host + port). */
+const asOrigin = (value: string) => {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return value.replace(/\/$/, "");
+  }
+};
+/** Browser origins allowed to call the API. `FRONTEND_URL` is always included:
+ *  config that names the frontend must never then reject it at CORS. */
+export const corsOrigins = Array.from(
+  new Set(
+    [...splitList(env.CORS_ORIGINS), env.FRONTEND_URL]
+      .map(asOrigin)
+      .filter(Boolean),
+  ),
+);
+/** Origins allowed to call the API *and* to be used as Better Auth callback
+ *  URLs. A single list derived from every frontend URL the operator configured
+ *  keeps CORS, the CSRF check and Better Auth from disagreeing — a mismatch
+ *  there makes the browser land on a confusing "Route not found" page when a
+ *  social sign-in fails. */
+export const trustedOrigins = Array.from(
+  new Set(
+    [...splitList(env.BETTER_AUTH_TRUSTED_ORIGINS), ...corsOrigins]
+      .map(asOrigin)
+      .filter(Boolean),
+  ),
+);

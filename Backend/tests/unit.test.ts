@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import bcrypt from "bcrypt";
 import { assertSignupRole, signupRoleState, withVerificationRedirect } from "../src/auth/auth.js";
+import { env, corsOrigins, trustedOrigins } from "../src/config/env.js";
 import { evaluateValidation, canTransition } from "../src/modules/payments/payment-state.js";
 import { mimeMatchesExt, PURPOSE_RULES } from "../src/modules/uploads.routes.js";
 import { formatZodError } from "../src/common/middleware.js";
@@ -16,6 +17,25 @@ describe("bcrypt via Better Auth callbacks contract (§19.1)", () => {
     expect(hash.startsWith("$2")).toBe(true);
     await expect(bcrypt.compare("correct horse", hash)).resolves.toBe(true);
     await expect(bcrypt.compare("wrong", hash)).resolves.toBe(false);
+  });
+});
+
+describe("trusted origins", () => {
+  it("always includes the configured frontend origin for CORS and Better Auth", () => {
+    const frontend = new URL(env.FRONTEND_URL).origin;
+    expect(corsOrigins).toContain(frontend);
+    expect(trustedOrigins).toContain(frontend);
+  });
+
+  it("trusts every CORS origin for Better Auth callbacks too", () => {
+    for (const origin of corsOrigins) expect(trustedOrigins).toContain(origin);
+  });
+
+  it("normalizes origins to scheme + host + port", () => {
+    for (const origin of [...corsOrigins, ...trustedOrigins]) {
+      expect(origin).not.toBe("");
+      expect(origin.endsWith("/")).toBe(false);
+    }
   });
 });
 

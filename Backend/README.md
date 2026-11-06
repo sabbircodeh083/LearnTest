@@ -109,7 +109,15 @@ RATE_LIMIT_MAX_REQUESTS=1000
 5. Add authorized redirect URI:
    - Development: `http://localhost:4000/api/auth/callback/google`
    - Production: `https://your-api-domain.com/api/auth/callback/google`
-6. Copy Client ID and Client Secret to `.env`
+   (this must be exactly `${BETTER_AUTH_URL}/api/auth/callback/google`)
+6. Add the frontend origin (e.g. `https://www.easylearntest.tech`) as an
+   **Authorized JavaScript origin**
+7. Copy Client ID and Client Secret to `.env`
+
+> **Cross-origin setup:** set `BETTER_AUTH_URL` to the API's public URL and put
+> the frontend origin in `CORS_ORIGINS`/`FRONTEND_URL`. Those values are also
+> used by Better Auth's `trustedOrigins`, so social sign-in is rejected with
+> `INVALID_ORIGIN`/`Cross-site request blocked` if they are missing.
 
 ### GitHub OAuth
 
@@ -118,6 +126,7 @@ RATE_LIMIT_MAX_REQUESTS=1000
 3. Set Authorization callback URL:
    - Development: `http://localhost:4000/api/auth/callback/github`
    - Production: `https://your-api-domain.com/api/auth/callback/github`
+   (must be exactly `${BETTER_AUTH_URL}/api/auth/callback/github`)
 4. Copy Client ID and Client Secret to `.env`
 
 ## 💳 Payment Gateway Setup (SSLCOMMERZ)
@@ -393,9 +402,30 @@ The server handles `SIGTERM` and `SIGINT` signals:
 - Old emails keep their original callback; resend them after deploying
 
 **OAuth callback errors**
-- Verify callback URLs match in provider console
-- Check `BETTER_AUTH_URL` in `.env`
+- Verify callback URLs match in provider console:
+  `https://<API_HOST>/api/auth/callback/google` and
+  `https://<API_HOST>/api/auth/callback/github`
+- Check `BETTER_AUTH_URL` — it must be the API's public URL (e.g.
+  `https://54-205-31-17.sslip.io`), not `localhost`
 - Ensure URLs include protocol (http:// or https://)
+
+**Social sign-in shows `{"error":{"code":"NOT_FOUND","message":"Route not found"}}`**
+- This was the old frontend fallback navigating to
+  `GET /api/auth/sign-in/<provider>`. Better Auth only exposes
+  `POST /api/auth/sign-in/social`; the frontend now shows the real error
+  instead of redirecting there.
+- If the real error is `403 FORBIDDEN` / `Cross-site request blocked` or
+  `INVALID_ORIGIN`, the browser origin is not trusted. Add the exact frontend
+  origin to `CORS_ORIGINS` (and optionally `BETTER_AUTH_TRUSTED_ORIGINS`).
+  `trustedOrigins` is derived from `BETTER_AUTH_TRUSTED_ORIGINS`,
+  `CORS_ORIGINS` and `FRONTEND_URL`, so configuring any one of them correctly
+  is enough for Better Auth.
+- If the real error is `PROVIDER_NOT_FOUND`, set
+  `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` or
+  `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` and restart the API.
+- Cross-site OAuth needs `SameSite=None; Secure` cookies (automatic when
+  `NODE_ENV=production`) and third-party cookies must be allowed by the
+  browser. Serving the frontend and API on the same site avoids this entirely.
 
 ## 📝 Scripts
 

@@ -6,7 +6,7 @@ import { AuthCard } from "@/components/AuthCard";
 import { FormSkeleton } from "@/components/Skeleton";
 import { Btn, Field, inputCls, Notice } from "@/components/ui";
 import { PasswordField } from "@/components/PasswordField";
-import { apiPost, ApiError, API_BASE } from "@/lib/api";
+import { apiPost, ApiError } from "@/lib/api";
 import { useAuth, roleHome, useRedirectIfSignedIn } from "@/lib/auth";
 import { safeExternalUrl, safeReturnTo } from "@/lib/url";
 import { checkEmail } from "@/lib/validation";
@@ -34,6 +34,7 @@ function SignInForm() {
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const [socialBusy, setSocialBusy] = useState<"google" | "github" | null>(null);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -104,14 +105,51 @@ function SignInForm() {
   };
 
   const social = async (provider: "google" | "github") => {
+    if (socialBusy) return;
+    setServerError("");
+    setSocialBusy(provider);
     try {
+      // Better Auth only exposes POST /sign-in/social. The provider is chosen
+      // in the body; there is no GET /sign-in/:provider route.
       const data = await apiPost<{ url?: string }>("/api/auth/sign-in/social", {
-        provider, callbackURL: `${window.location.origin}/`,
+        provider,
+        callbackURL: `${window.location.origin}/`,
+        // Return the authorize URL instead of relying on a Location header;
+        // the browser is navigated explicitly below.
+        disableRedirect: true,
       });
-      if (data?.url && safeExternalUrl(data.url)) window.location.href = data.url;
-      else window.location.href = `${API_BASE}/api/auth/sign-in/${provider}`;
-    } catch {
-      window.location.href = `${API_BASE}/api/auth/sign-in/${provider}`;
+      const url = safeExternalUrl(data?.url);
+      if (!url) {
+        throw new ApiError(
+          502,
+          "OAUTH_FAILED",
+          "The sign-in provider did not return an authorization URL. Please try again.",
+        );
+      }
+      window.location.href = url;
+    } catch (err) {
+      setSocialBusy(null);
+      let message =
+        "Could not start social sign-in. Check your connection; if this keeps happening, the API is not allowing this site (check CORS_ORIGINS).";
+      if (err instanceof ApiError) {
+        if (err.status === 429) {
+          message = "Too many sign-in attempts. Please wait a minute and try again.";
+        } else if (err.code === "PROVIDER_NOT_FOUND") {
+          message = `${
+            provider === "google" ? "Google" : "GitHub"
+          } sign-in is not configured on the server yet.`;
+        } else if (
+          err.code === "INVALID_ORIGIN" ||
+          err.code === "INVALID_CALLBACK_URL" ||
+          /cross-site request blocked/i.test(err.message)
+        ) {
+          message =
+            "This site is not allowed to start sign-in. Add this origin to the API's CORS_ORIGINS/FRONTEND_URL and redeploy the backend.";
+        } else {
+          message = err.message;
+        }
+      }
+      setServerError(message);
     }
   };
 
@@ -162,8 +200,12 @@ function SignInForm() {
       </form>
       <div className="my-5 flex items-center gap-3 text-xs text-muted"><span className="h-px flex-1 bg-line" />or continue with<span className="h-px flex-1 bg-line" /></div>
       <div className="grid grid-cols-2 gap-2">
-        <Btn variant="ghost" onClick={() => social("google")}>Google</Btn>
-        <Btn variant="ghost" onClick={() => social("github")}>GitHub</Btn>
+        <Btn variant="ghost" onClick={() => social("google")} disabled={socialBusy !== null}>
+          {socialBusy === "google" ? "Connecting…" : "Google"}
+        </Btn>
+        <Btn variant="ghost" onClick={() => social("github")} disabled={socialBusy !== null}>
+          {socialBusy === "github" ? "Connecting…" : "GitHub"}
+        </Btn>
       </div>
       <p className="mt-5 text-center text-sm text-muted">New to LearnTest? <Link href="/sign-up" className="font-semibold text-brandstrong">Create an account</Link></p>
     </AuthCard>

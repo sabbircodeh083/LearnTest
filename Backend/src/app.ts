@@ -3,7 +3,7 @@ import helmet from "helmet";
 import cors from "cors";
 import swaggerUi from "swagger-ui-express";
 import rateLimit from "express-rate-limit";
-import { corsOrigins, env } from "./config/env.js";
+import { corsOrigins, env, trustedOrigins } from "./config/env.js";
 import {
   errorHandler,
   notFoundHandler,
@@ -79,15 +79,18 @@ export function createApp(deps: AppDeps = {}) {
   // (non-browser clients, provider callbacks) are unaffected; the payment
   // provider's own callback posts are exempt (they are validated server-side
   // and never trusted for settlement on their own).
-  const trusted = new Set(
-    [...corsOrigins, env.FRONTEND_URL, env.API_BASE_URL].map((o) => {
+  // `trustedOrigins` is the shared list also given to Better Auth, so CORS,
+  // this check and Better Auth's own origin check can never disagree.
+  const trusted = new Set([
+    ...trustedOrigins,
+    ...(() => {
       try {
-        return new URL(o).origin;
+        return [new URL(env.API_BASE_URL).origin];
       } catch {
-        return o;
+        return [];
       }
-    }),
-  );
+    })(),
+  ]);
   app.use((req, res, next) => {
     if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) return next();
     if (req.path.startsWith("/api/v1/payments/sslcommerz/")) return next();

@@ -335,6 +335,15 @@ NEXT_PUBLIC_API_BASE_URL=https://api.yourdomain.com
 - Backend `BETTER_AUTH_URL` misconfigured
 - Frontend and backend on different protocols (http vs https)
 
+**Sign-in shows a JSON `NOT_FOUND` / "Route not found" page**
+- This is the API's 404 page. Social sign-in must call
+  `POST /api/auth/sign-in/social`; there is no
+  `GET /api/auth/sign-in/<provider>` route.
+- If the Google/GitHub button now shows an inline error instead, read it:
+  `Cross-site request blocked` / `INVALID_ORIGIN` means the backend does not
+  trust this frontend origin — add it to the backend's `CORS_ORIGINS`
+  (and `FRONTEND_URL`), then redeploy the API.
+
 **Role selection page appears repeatedly**
 - Confirm the `user` document has `roleSelected: true` after choosing a role
 - Manual signup should set `roleSelected: true` when a role is supplied
